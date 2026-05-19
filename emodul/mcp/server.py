@@ -51,15 +51,58 @@ log = logging.getLogger("emodul.mcp")
 
 mcp = FastMCP(
     "emodul",
-    instructions=(
-        "Control a Polish Tech Sterowniki / eModul.pl floor-heating system. "
-        "Call `whoami` first to verify auth; if unauthenticated, call "
-        "`login_browser` (opens a browser form). For reading state use "
-        "`get_status` (default module) or `list_zones --all-modules`. For "
-        "writes (`set_zone_temperature`, `boost_zone`, `toggle_zone`), the "
-        "controller takes 5-30 seconds to acknowledge — the tool blocks until "
-        "settled by default. Schedules are referenced by name or index 0-4."
-    ),
+    instructions="""\
+Control a Polish Tech Sterowniki / eModul.pl floor-heating system (TECH \
+controllers L-4X / L-8 / L-9 / L-12) via 16 MCP tools.
+
+WHEN TO USE: any request mentioning heating, room temperature, floor heating, \
+ogrzewanie, a room thermostat (typical Polish zone names: Salon, Łazienka, \
+Sypialnia, Pokój, Biuro, Garaż, Kuchnia), boiler, eModul cloud, weekly heating \
+schedules, serwis menu / PIN, alarm history, historical temperature data. \
+Polish trigger phrases: "ustaw temperaturę", "podgrzej", "włącz/wyłącz \
+ogrzewanie", "ile stopni", "harmonogram grzania".
+
+TOOLS (16):
+- READ (safe): whoami, list_modules, get_status, list_zones, get_zone, \
+list_schedules, audit_settings, get_alarms, get_temperature_history
+- WRITE (destructiveHint=true, client prompts for confirmation): \
+set_zone_temperature, boost_zone, toggle_zone, attach_schedule, update_setting
+- AUTH: login_browser, set_default_module
+
+WORKFLOW:
+1. whoami → if token_present=false, call login_browser (opens local form, the \
+password never reaches you; returns once user submits or after timeout).
+2. list_modules → discover controllers. Users name them freely (one per floor, \
+per building, anything). NEVER hard-code module names — always discover first.
+3. Optionally set_default_module once, then subsequent calls omit `module`.
+4. For zone requests: list_zones first to enumerate, then act.
+
+CONVENTIONS:
+- Temperatures: Celsius, 0.1° precision (e.g. 21.5). Wire encoding handled.
+- Zone selectors: case-insensitive name substring OR numeric id.
+- Modes (zone.mode.mode): constantTemp / timeLimit (boost) / localSchedule / \
+globalSchedule (5 shared slots indexed 0-4).
+- Action field: heating / cooling / idle / off.
+- Schedule intervals: minutes-of-day (0-1439).
+
+RESULT ENVELOPE: every tool returns {ok: true, ...payload} or {ok: false, \
+error, code}. Codes: auth_required, login_failed, api_error (with status), \
+not_found, bad_input, internal. CHECK `ok` BEFORE CHAINING WRITES.
+
+SAFETY:
+- Writes block 5-30s while the controller acknowledges — do not time out the \
+call early.
+- Narrate writes before invoking ("I'm going to set Salon to 21.5 °C"); the \
+destructiveHint prompt is not a substitute for transparency.
+- NEVER log or echo JWT, password, user_id, controller udid, email, or the \
+service-menu PIN (typically 5162 on TECH controllers).
+- In summer (May-Sep) the furnace is often off, so zones sit below setpoint \
+and per-zone relays read "off" even though the system "works" — do not \
+diagnose hardware faults from temperature data alone in off-season; ask the \
+user.
+- Long get_temperature_history calls risk the client's ~60s tool timeout — \
+narrow the date range and chunk if needed.
+""",
 )
 
 
