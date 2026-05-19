@@ -47,33 +47,35 @@ jobs:
           head -3 /tmp/test-skill/SKILL.md | grep -q '^name: emodul$'
           echo "✅ SKILL.md packaged + installable"
 
-      - name: MCP server smoke test (initialize + tools/list via stdio)
+      - name: MCP server smoke test (real client over stdio)
         run: |
-          set -e
-          OUT=$(printf '%s\n%s\n%s\n' \
-            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
-            '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' \
-            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-            | timeout 10 emodul mcp 2>/dev/null || true)
-          echo "$OUT" | python3 -c "
-          import sys, json
-          tool_count = 0
-          for line in sys.stdin:
-              line = line.strip()
-              if not line: continue
-              try:
-                  msg = json.loads(line)
-                  if msg.get('id') == 2 and 'result' in msg:
-                      tool_count = len(msg['result']['tools'])
-              except: pass
-          assert tool_count >= 10, f'expected ≥10 MCP tools, got {tool_count}'
-          print(f'✅ MCP server exposes {tool_count} tools')
-          "
+          python3 <<'PY'
+          import asyncio
+          import sys
+          from mcp.client.session import ClientSession
+          from mcp.client.stdio import StdioServerParameters, stdio_client
 
-      - name: Verify emodul-mcp standalone entry point also resolves
+          async def main() -> int:
+              params = StdioServerParameters(command="emodul", args=["mcp"])
+              async with stdio_client(params) as (read, write):
+                  async with ClientSession(read, write) as session:
+                      await asyncio.wait_for(session.initialize(), timeout=15)
+                      result = await asyncio.wait_for(session.list_tools(), timeout=10)
+                      tools = result.tools
+                      print(f"MCP server exposes {len(tools)} tools:")
+                      for t in tools:
+                          print(f"  - {t.name}")
+                      assert len(tools) >= 10, f"expected at least 10 tools, got {len(tools)}"
+                      return 0
+
+          sys.exit(asyncio.run(main()))
+          PY
+
+      - name: Verify emodul-mcp standalone entry point resolves
         run: |
           which emodul-mcp
-          emodul-mcp --help 2>&1 | head -2 || true   # FastMCP doesn't take --help; just verify it loads
+          # The script itself launches the server; just verify the module imports.
+          python -c "from emodul.mcp.server import main, mcp; assert callable(main)"
 
       - name: Verify Python package imports cleanly
         run: |
