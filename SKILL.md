@@ -8,12 +8,16 @@ description: |
 
 ## Overview
 
-`emodul` is a Python CLI at `/path/to/emodul/` that wraps the eModul.pl cloud API (used by Polish Tech Sterowniki floor-heating controllers like L-4X WIFI). It handles JWT auth with keychain-backed refresh, exposes both raw and high-level (named-slug) parameter control, decodes Polish menu trees, and bundles a long-running watcher that logs relay/zone transitions to SQLite.
+`emodul` is a Python CLI (and MCP server) for the eModul.pl cloud API used by Polish Tech Sterowniki floor-heating controllers (L-4X WIFI, L-8, L-9, L-12). It handles JWT auth with keychain-backed refresh, exposes both raw and high-level (named-slug) parameter control, decodes Polish menu trees, and bundles a long-running watcher that logs relay/zone transitions to SQLite.
 
-Every command supports `--json` for machine-parseable output. The user's setup typically has 2 controllers ("Parter" = ground floor, "Piętro" = upstairs) with 3-5 zones each.
+Every command supports `--json` for machine-parseable output. The user's setup typically has 1-2 controllers ("Parter" = ground floor, "Piętro" = upstairs) with 3-5 zones each.
 
-**Binary**: `/path/to/emodul/.venv/bin/emodul`
-**Run from**: any directory (the binary uses absolute config path)
+**Two ways an AI agent can drive it**:
+- **CLI directly** (this skill — for Claude Code / Codex CLI / Cursor agent mode / Aider). Run `emodul <subcommand> --json` from bash.
+- **MCP server** (for Claude Desktop / Cursor chat / Continue / Cline / Zed / JetBrains). Add `{"command": "emodul", "args": ["mcp"]}` to the client's MCP config. ~16 tools available natively. See [AGENT.md](README.md) Path A.
+
+**Binary**: `emodul` (installed via `pipx install emodul`; falls back to `pip install --user emodul`)
+**Run from**: any directory (binary uses absolute config path)
 **Full reference**: see `README.md` next to this file when Quick Start isn't enough.
 
 ## Safety Rules

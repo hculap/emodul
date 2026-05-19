@@ -23,7 +23,7 @@ import json
 import secrets
 import threading
 import webbrowser
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from emodul.api import ApiClient, EmodulApiError
@@ -392,8 +392,16 @@ def web_login_flow(
     open_browser: bool = True,
     port: int | None = None,
     timeout: int = 300,
+    on_url: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Run the browser login flow. Blocks until success / timeout / Ctrl-C.
+
+    Args:
+        on_url: Optional callback invoked with the login URL *before* blocking.
+                MCP servers use this to send the URL to the AI agent via a
+                progress notification (since the CLI's stderr print doesn't
+                reach the agent). Errors raised inside the callback are
+                swallowed to keep the flow alive.
 
     Returns a dict with keys: `token`, `user_id`, `email`, `password`.
     Raises SystemExit on timeout, cancel, or server-bind failure.
@@ -419,6 +427,13 @@ def web_login_flow(
     err_console.print('[bold]🔥 emodul login — open in your browser:[/bold]')
     err_console.print(f'   [cyan]{url}[/cyan]')
     err_console.print(f'[dim]Waiting up to {timeout}s. Ctrl-C to cancel.[/dim]')
+
+    if on_url is not None:
+        try:
+            on_url(url)
+        except Exception:
+            # Callback failures must not break the auth flow.
+            pass
 
     opened = False
     if open_browser:

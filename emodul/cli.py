@@ -12,6 +12,7 @@ from emodul.auth import make_refresher
 from emodul.commands import (
     alarms,
     auth,
+    mcp,
     menu,
     misc,
     modules,
@@ -130,6 +131,7 @@ watch.register(cli, _wrap_api_errors)
 settings.register(cli, _wrap_api_errors)
 schedules.register(cli, _wrap_api_errors)
 skill.register(cli, _wrap_api_errors)
+mcp.register(cli, _wrap_api_errors)
 
 
 if __name__ == "__main__":

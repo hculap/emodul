@@ -44,6 +44,7 @@ Discussions = "https://github.com/hculap/emodul/discussions"
 
 [project.scripts]
 emodul = "emodul.cli:cli"
+emodul-mcp = "emodul.mcp.server:main"
 
 [build-system]
 requires = ["hatchling"]

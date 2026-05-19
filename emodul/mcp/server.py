@@ -25,14 +25,18 @@ from mcp.types import ToolAnnotations
 
 from emodul.format import flatten_zones, temp_to_api
 from emodul.mcp._helpers import (
-    AuthRequired,
-    err_response,
     ok_response,
     open_api,
     resolve_udid,
     safely,
 )
-from emodul.settings_map import SETTINGS, SETTINGS_BY_NAME, find_item, find_value, is_accessible
+from emodul.settings_map import (
+    SETTINGS,
+    SETTINGS_BY_NAME,
+    find_item,
+    find_value,
+    is_accessible,
+)
 
 # Logging to stderr — stdio MCP transport reserves stdout for JSON-RPC.
 logging.basicConfig(

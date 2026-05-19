@@ -43,24 +43,47 @@ emodul watch install-service           → launchd/systemd background poller →
 
 ---
 
-## One-line setup for AI agents 🤖
+## Three ways to use this 🤖
 
-Give your AI agent (Claude Code, Codex, Gemini CLI, Cursor) **just this link**:
+| Path | For which agents | What it gives you |
+|---|---|---|
+| **A: MCP server** | Claude Desktop / Cursor chat / Continue / Cline / Zed / JetBrains AI / OpenCode / Gemini CLI | One `pipx install emodul` + a JSON entry in the client config. Chat clients call `get_status`, `set_zone_temperature`, etc. as native tools. |
+| **B: AGENT.md prompt** | Claude Code / Codex CLI / Cursor agent / Aider | Paste a single URL; the CLI agent runs `pipx install emodul && emodul skill install && emodul auth login --browser`. SKILL.md gets discovered automatically. |
+| **C: Copy-paste fallback** | claude.ai web / ChatGPT web / Cowork (sandboxed) | Sandboxed agent prints the commands; user runs them in their own terminal. |
+
+See [AGENT.md](AGENT.md) for full per-runtime configs.
+
+### Path A in 30 seconds — Claude Desktop
+
+```bash
+pipx install emodul
+emodul auth login --browser       # one-time login
+```
+
+Then in `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "emodul": {
+      "command": "emodul",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop → ask *"what's the temperature in Salon?"* and Claude calls the MCP tool natively.
+
+### Path B in 30 seconds — Claude Code (or any CLI agent)
+
+Paste this URL into your agent:
 
 ```
 https://raw.githubusercontent.com/hculap/emodul/main/AGENT.md
 ```
 
-…and say "follow this setup prompt". The agent will:
-
-1. `pipx install emodul`
-2. `emodul skill install` — drops the bundled Claude Skill at `~/.claude/skills/emodul/SKILL.md` so future sessions auto-discover the CLI
-3. Ask you for credentials, run `emodul auth login`, select a default module
-4. Verify with `emodul status`
-
-After that, "ustaw Salon na 22" / "podgrzej Łazienkę na 23 na 2h" / "sprawdź ogrzewanie" just work in any Claude Code session in any directory.
-
-See [AGENT.md](AGENT.md) for the full prompt.
+The agent handles everything: install, skill registration, browser auth, default-module selection.
 
 ---
 
