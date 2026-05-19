@@ -12,6 +12,7 @@ from typing import Any
 from emodul.api import ApiClient, EmodulApiError
 from emodul.auth import make_refresher
 from emodul.config import Config
+from emodul.web_auth import LoginFlowError
 
 
 class AuthRequired(RuntimeError):
@@ -100,6 +101,8 @@ def safely(fn):
             return await fn(*args, **kwargs)
         except AuthRequired as exc:
             return err_response(str(exc), code="auth_required")
+        except LoginFlowError as exc:
+            return err_response(str(exc), code="login_failed")
         except EmodulApiError as exc:
             # Log at warning — recoverable / expected operational failure.
             log.warning(

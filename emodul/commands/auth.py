@@ -76,14 +76,17 @@ def register(cli: click.Group, wrap) -> None:
             use_browser = not sys.stdin.isatty()
 
         if use_browser:
-            from emodul.web_auth import web_login_flow
-            result = web_login_flow(
-                base_url=ctx.config.base_url,
-                language_id=language_id,
-                open_browser=not no_open,
-                port=port,
-                timeout=timeout,
-            )
+            from emodul.web_auth import LoginFlowError, web_login_flow
+            try:
+                result = web_login_flow(
+                    base_url=ctx.config.base_url,
+                    language_id=language_id,
+                    open_browser=not no_open,
+                    port=port,
+                    timeout=timeout,
+                )
+            except LoginFlowError as exc:
+                raise SystemExit(str(exc)) from exc
             token = result["token"]
             user_id = result["user_id"]
             email = result["email"]
