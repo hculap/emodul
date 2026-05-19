@@ -44,9 +44,17 @@ pipx` first. The login command opens a browser form — the user types
 credentials, the CLI stores the JWT in `~/.config/emodul/config.json`
 and the password in the OS keychain.
 
-Then add emodul as an MCP server in your client's config:
+Then add emodul as an MCP server in your client's config.
 
-### Claude Desktop
+### Claude Desktop (recommended — one command)
+
+```bash
+emodul install claude-desktop
+```
+
+This drops the MCP-flavored skill into `~/.claude/skills/emodul-mcp/` and adds an `mcpServers.emodul` entry to `~/Library/Application Support/Claude/claude_desktop_config.json` (with a timestamped `.bak-…` of the prior file). Pass `--dry-run` first to preview. Use `--force` if a manual `emodul` entry already exists. Then ⌘+Q and reopen Claude Desktop.
+
+### Claude Desktop (manual)
 File: `~/Library/Application Support/Claude/claude_desktop_config.json`
 (macOS) / `%APPDATA%\Claude\claude_desktop_config.json` (Windows) /
 `~/.config/claude-desktop/claude_desktop_config.json` (Linux)
@@ -189,11 +197,12 @@ Expected: `emodul, version 0.1.3` or higher.
 ### Step 2 — Install the bundled Claude Skill
 
 ```bash
-emodul skill install
+emodul install claude-code
 ```
 
-Drops `SKILL.md` at `~/.claude/skills/emodul/SKILL.md`. Future Claude
-Code sessions in any directory will auto-discover the **emodul** skill.
+Drops the CLI-flavored `SKILL.md` at `~/.claude/skills/emodul/SKILL.md`.
+Future Claude Code sessions in any directory will auto-discover the
+**emodul** skill. (Legacy alias `emodul skill install` still works.)
 
 For other harnesses: read `emodul skill show` and feed the contents into
 their own skill mechanism, or use `emodul skill install --to PATH`.
