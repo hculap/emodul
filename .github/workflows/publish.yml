@@ -1,13 +1,19 @@
 name: Publish to PyPI
 
 # Triggered when you push a tag like `v0.2.0`.
-# Requires PYPI_API_TOKEN secret to be set in repo settings:
-#   Settings → Secrets and variables → Actions → New repository secret
-#   Name:  PYPI_API_TOKEN
-#   Value: <token from https://pypi.org/manage/account/token/>
 #
-# Or use OIDC trusted publishing (preferred): https://docs.pypi.org/trusted-publishers/
-# In which case remove the `password:` line and set `id-token: write` permission.
+# Auth: PyPI Trusted Publishing via OIDC (no token in repo secrets).
+# Setup (once, on pypi.org):
+#   1. Go to https://pypi.org/manage/project/emodul/settings/publishing/
+#   2. "Add a new publisher" → GitHub
+#   3. Fields:
+#        Owner: hculap
+#        Repository name: emodul
+#        Workflow name: publish.yml
+#        Environment name: pypi
+#   4. Save. Next tag push uses OIDC; no PYPI_API_TOKEN needed.
+#
+# If the PYPI_API_TOKEN secret is later removed from the repo this still works.
 
 on:
   push:
@@ -19,9 +25,9 @@ jobs:
     name: Build sdist + wheel
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -31,7 +37,7 @@ jobs:
       - name: Build
         run: python -m build
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: dist
           path: dist/
@@ -43,13 +49,14 @@ jobs:
     environment:
       name: pypi
       url: https://pypi.org/project/emodul/
+    permissions:
+      id-token: write    # required for Trusted Publishing (OIDC)
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: dist
           path: dist/
 
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+        # No `password:` — action auto-detects OIDC when id-token is granted
