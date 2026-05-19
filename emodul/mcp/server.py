@@ -23,8 +23,11 @@ import anyio
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 
+from emodul._zone_resolver import resolve_zone as _resolve_zone_helper
+from emodul.api import EmodulApiError
 from emodul.format import flatten_zones, temp_to_api
 from emodul.mcp._helpers import (
+    err_response,
     ok_response,
     open_api,
     resolve_udid,
@@ -94,8 +97,19 @@ async def whoami() -> dict:
                         "firstName": info.get("firstName"),
                         "lastName": info.get("lastName"),
                     }
+            except EmodulApiError as exc:
+                # 401/403 → the cached token is dead. Flip authenticated so
+                # the agent calls `login_browser` instead of proceeding.
+                if exc.status in (401, 403):
+                    out["authenticated"] = False
+                    out["refresh_required"] = True
+                out["server_info_error"] = {
+                    "kind": "api",
+                    "status": exc.status,
+                    "message": str(exc.body) if exc.body else f"HTTP {exc.status}",
+                }
             except Exception as exc:  # noqa: BLE001
-                out["server_info_error"] = str(exc)
+                out["server_info_error"] = {"kind": "internal", "message": str(exc)}
         return ok_response(**out)
 
     return await anyio.to_thread.run_sync(_impl)
@@ -196,15 +210,7 @@ async def get_zone(zone: str, module: str | None = None) -> dict:
         with open_api() as (api, cfg):
             udid = resolve_udid(module, api, cfg)
             snap = api.get_module(udid)
-        rows = flatten_zones(snap)
-        z = zone
-        if z.isdigit():
-            zid = int(z)
-            match = next((r for r in rows if r.get("zone_id") == zid), None)
-        else:
-            q = z.lower()
-            matches = [r for r in rows if q in (r.get("name") or "").lower()]
-            match = matches[0] if len(matches) == 1 else None
+        match = _resolve_zone_helper(flatten_zones(snap), zone)
         if not match:
             raise LookupError(f"Zone not found or ambiguous: {zone}")
         elements = (snap.get("zones") or {}).get("elements") or []
@@ -296,15 +302,22 @@ async def audit_settings() -> dict:
             all_known: dict[str, dict] = {}
             menus_by_module: dict[str, dict] = {}
             needed = sorted({s.menu_type for s in SETTINGS})
+            menu_errors_by_module: dict[str, dict[str, str]] = {}
             for udid, label in targets:
                 menus: dict = {}
+                menu_errors: dict[str, str] = {}
                 for mt in needed:
                     chain = _pin_chain(cfg, udid, mt) or None
                     try:
                         menus[mt] = api.get_menu(udid, mt, pin_chain=chain)
-                    except Exception:
+                    except EmodulApiError as exc:
+                        # Record but continue — partial audits are still useful.
+                        # Surface the failure so the user knows the report
+                        # is incomplete (e.g. MS PIN missing → 403).
                         menus[mt] = {}
+                        menu_errors[mt] = f"HTTP {exc.status}"
                 menus_by_module[udid] = menus
+                menu_errors_by_module[udid] = menu_errors
                 findings = []
                 for s in SETTINGS:
                     item = find_item(menus.get(s.menu_type, {}), s.ido)
@@ -331,6 +344,7 @@ async def audit_settings() -> dict:
                         "bad": sum(1 for f in findings if f["severity"] == "bad"),
                         "warn": sum(1 for f in findings if f["severity"] == "warn"),
                     },
+                    "menu_errors": menu_errors_by_module.get(udid) or {},
                 }
         drift = []
         if len(targets) > 1:
@@ -399,12 +413,14 @@ async def get_temperature_history(
         year: 4-digit year (with `month`).
         module: Optional module override.
 
-    Returns: `{ok, period, history: {"|&^4fdkl|<ZoneName>": [{x, y}, ...]}}`
-    where `x` is `YYYYMMDDhhmm` and `y` is °C.
+    Returns: `{ok, period, status, data: {history: {<key>: [{x, y}, ...]}}}`
+    where `<key>` is an opaque TECH identifier ending with the zone name
+    (split on `|` and take the last segment to get the readable name);
+    `x` is a `YYYYMMDDhhmm` timestamp string and `y` is °C.
 
-    For multi-month ranges, the CLI `emodul stats dump --since 6m` is more
-    appropriate — running it from an MCP tool would exceed the 60s client
-    timeout in most clients.
+    For multi-month ranges, prefer the CLI `emodul stats dump --since 6m` —
+    running long stats fetches from an MCP tool may exceed Claude Desktop's
+    ~60s tool timeout.
     """
 
     def _impl() -> dict:
@@ -452,14 +468,7 @@ async def set_zone_temperature(
         with open_api() as (api, cfg):
             udid = resolve_udid(module, api, cfg)
             snap = api.get_module(udid)
-            rows = flatten_zones(snap)
-            z = zone
-            if z.isdigit():
-                row = next((r for r in rows if r["zone_id"] == int(z)), None)
-            else:
-                q = z.lower()
-                matches = [r for r in rows if q in (r.get("name") or "").lower()]
-                row = matches[0] if len(matches) == 1 else None
+            row = _resolve_zone_helper(flatten_zones(snap), zone)
             if not row:
                 raise LookupError(f"Zone not found or ambiguous: {zone}")
             resp = api.set_zone_constant_temp(
@@ -515,13 +524,7 @@ async def boost_zone(
         with open_api() as (api, cfg):
             udid = resolve_udid(module, api, cfg)
             snap = api.get_module(udid)
-            rows = flatten_zones(snap)
-            q = zone.lower() if not zone.isdigit() else zone
-            if zone.isdigit():
-                row = next((r for r in rows if r["zone_id"] == int(zone)), None)
-            else:
-                matches = [r for r in rows if q in (r.get("name") or "").lower()]
-                row = matches[0] if len(matches) == 1 else None
+            row = _resolve_zone_helper(flatten_zones(snap), zone)
             if not row:
                 raise LookupError(f"Zone not found or ambiguous: {zone}")
             resp = api.set_zone_time_limit(
@@ -572,13 +575,7 @@ async def toggle_zone(
         with open_api() as (api, cfg):
             udid = resolve_udid(module, api, cfg)
             snap = api.get_module(udid)
-            rows = flatten_zones(snap)
-            if zone.isdigit():
-                row = next((r for r in rows if r["zone_id"] == int(zone)), None)
-            else:
-                q = zone.lower()
-                matches = [r for r in rows if q in (r.get("name") or "").lower()]
-                row = matches[0] if len(matches) == 1 else None
+            row = _resolve_zone_helper(flatten_zones(snap), zone)
             if not row:
                 raise LookupError(f"Zone not found or ambiguous: {zone}")
             resp = api.set_zone_state(udid, zone_id=row["zone_id"], state=state)
@@ -622,13 +619,7 @@ async def attach_schedule(
         with open_api() as (api, cfg):
             udid = resolve_udid(module, api, cfg)
             snap = api.get_module(udid)
-            rows = flatten_zones(snap)
-            if zone.isdigit():
-                row = next((r for r in rows if r["zone_id"] == int(zone)), None)
-            else:
-                q = zone.lower()
-                matches = [r for r in rows if q in (r.get("name") or "").lower()]
-                row = matches[0] if len(matches) == 1 else None
+            row = _resolve_zone_helper(flatten_zones(snap), zone)
             if not row:
                 raise LookupError(f"Zone not found or ambiguous: {zone}")
             gs = (snap.get("zones") or {}).get("globalSchedules") or {}
@@ -694,6 +685,9 @@ async def update_setting(
                 targets = [resolve_udid(module, api, cfg)]
             results = []
             for udid in targets:
+                # Narrow exception scope to known API/network failures so that
+                # genuine bugs (KeyError, AttributeError) propagate to `safely`
+                # and get a full traceback rather than silent per-target masking.
                 try:
                     resp = api.set_menu_param(udid, s.menu_type, s.ido, {"value": wire})
                     settled = True
@@ -705,15 +699,36 @@ async def update_setting(
                             ),
                             timeout=timeout,
                         )
-                    results.append({"udid": udid, "ok": True, "settled": settled, "response": resp})
-                except Exception as exc:  # noqa: BLE001
-                    results.append({"udid": udid, "ok": False, "error": str(exc)})
-        return ok_response(
-            name=s.name,
-            label=s.pl_label,
-            wire_value=wire,
-            display=s.decode(wire),
-            applied_to=results,
+                    results.append(
+                        {"udid": udid, "ok": True, "settled": settled, "response": resp}
+                    )
+                except EmodulApiError as exc:
+                    results.append(
+                        {
+                            "udid": udid,
+                            "ok": False,
+                            "error": f"API {exc.status} on {exc.path}: {exc.body}",
+                            "status": exc.status,
+                        }
+                    )
+        # Aggregate: if ANY target failed, the top-level envelope is NOT ok.
+        ok_count = sum(1 for r in results if r["ok"])
+        all_ok = ok_count == len(results)
+        payload = {
+            "name": s.name,
+            "label": s.pl_label,
+            "wire_value": wire,
+            "display": s.decode(wire),
+            "applied_to": results,
+            "ok_count": ok_count,
+            "fail_count": len(results) - ok_count,
+        }
+        if all_ok:
+            return ok_response(**payload)
+        return err_response(
+            f"{len(results) - ok_count}/{len(results)} targets failed",
+            code="partial_failure",
+            **payload,
         )
 
     return await anyio.to_thread.run_sync(_impl)
@@ -732,13 +747,16 @@ async def login_browser(timeout: int = 300, ctx: Context | None = None) -> dict:
     password is sent ONLY to emodul.pl — never reaches the AI agent.
 
     Args:
-        timeout: Max seconds to wait for the user to complete login.
+        timeout: Max seconds to wait for the user to complete login. Note
+                 that Claude Desktop's tool ceiling is ~60s; for chat agents
+                 without `resetTimeoutOnProgress` support, run
+                 `emodul auth login --browser` from a host terminal instead.
 
-    Returns: `{ok, email, user_id}` on success.
-
-    UX: the URL is reported via progress notification AND returned in the
-    blocking phase — surface both to the user. If `webbrowser.open()` fails
-    (headless host, sandbox), the user must open the URL manually.
+    Returns: `{ok, email, user_id, url, keychain_ok, warning?}` on success.
+        The `url` is also sent as an MCP log notification while blocking —
+        surface it to the user immediately. `keychain_ok=False` means the
+        token works now but auto-refresh on next expiry will fail; the
+        warning text explains the remediation.
     """
     from emodul import auth as auth_kc
     from emodul.config import Config
@@ -750,16 +768,19 @@ async def login_browser(timeout: int = 300, ctx: Context | None = None) -> dict:
         captured_url.append(url)
         log.info("browser login URL: %s", url)
         if ctx is not None:
-            # Best-effort progress notification (may not reach all clients)
+            # Best-effort: send an MCP log message that surfaces the URL in
+            # clients that support log notifications. `send_log_message` is
+            # async and we're on a worker thread, so use `from_thread.run`
+            # (which awaits coroutines). Failures are intentionally swallowed
+            # but logged at debug level so they're not invisible.
             try:
-                anyio.from_thread.run_sync(
-                    lambda: ctx.session.send_log_message(
-                        level="info",
-                        data=f"Open this URL to sign in: {url}",
-                    )
+                anyio.from_thread.run(
+                    ctx.session.send_log_message,
+                    "info",
+                    f"Open this URL to sign in: {url}",
                 )
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                log.debug("MCP log notification failed (non-fatal): %r", exc)
 
     def _impl() -> dict:
         cfg = Config.load()
@@ -771,22 +792,34 @@ async def login_browser(timeout: int = 300, ctx: Context | None = None) -> dict:
             timeout=timeout,
             on_url=_on_url,
         )
-        # Persist token + keychain
+        # Persist token first; keychain is best-effort but surfaced.
         new_cfg = cfg.with_updates(
             token=result["token"],
             user_id=result["user_id"],
             email=result["email"],
         )
         new_cfg.save()
+        keychain_ok = True
+        keychain_error: str | None = None
         try:
             auth_kc.set_password(result["email"], result["password"])
         except Exception as exc:  # noqa: BLE001
+            keychain_ok = False
+            keychain_error = str(exc)
             log.warning("keychain set failed: %s", exc)
-        return ok_response(
+        out: dict[str, Any] = dict(
             email=result["email"],
             user_id=result["user_id"],
             url=captured_url[0] if captured_url else None,
+            keychain_ok=keychain_ok,
         )
+        if not keychain_ok:
+            out["warning"] = (
+                "Password not stored in OS keychain — login works now but "
+                f"auto-refresh will fail on next token expiry ({keychain_error}). "
+                "User will need to re-run login_browser when this happens."
+            )
+        return ok_response(**out)
 
     return await anyio.to_thread.run_sync(_impl)
 
@@ -811,10 +844,18 @@ async def set_default_module(module: str) -> dict:
 
             udid = _resolve(module, mods)
             match = next((m for m in mods if m["udid"] == udid), None)
+        # _resolve has a fast-path for full-hex udids that doesn't verify
+        # the udid actually exists on this account — guard against persisting
+        # a bogus default.
+        if match is None:
+            raise LookupError(
+                f"Module {module!r} resolves to udid {udid} which is not on "
+                "this account. Call `list_modules` to see what's available."
+            )
         cfg = Config.load()
         new_cfg = cfg.with_updates(default_udid=udid)
         new_cfg.save()
-        return ok_response(default_udid=udid, name=match.get("name") if match else None)
+        return ok_response(default_udid=udid, name=match.get("name"))
 
     return await anyio.to_thread.run_sync(_impl)
 

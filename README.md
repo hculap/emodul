@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/hculap/emodul/actions/workflows/ci.yml/badge.svg)](https://github.com/hculap/emodul/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Claude Skill](https://img.shields.io/badge/Claude-Skill%20ready-D97757.svg)](SKILL.md)
 [![GitHub stars](https://img.shields.io/github/stars/hculap/emodul?style=social)](https://github.com/hculap/emodul/stargazers)
 
@@ -58,6 +58,7 @@ See [AGENT.md](AGENT.md) for full per-runtime configs.
 ```bash
 pipx install emodul
 emodul auth login --browser       # one-time login
+emodul skill install              # so Claude Code (Path B) shares the same skill
 ```
 
 Then in `~/Library/Application Support/Claude/claude_desktop_config.json`:

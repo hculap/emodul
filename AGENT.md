@@ -78,9 +78,13 @@ Restart Cursor; tools appear under Settings → MCP.
 File: `.continue/mcpServers/emodul.yaml`
 
 ```yaml
-name: emodul
-command: emodul
-args: [mcp]
+name: emodul-mcp
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: emodul
+    command: emodul
+    args: [mcp]
 ```
 
 Available in agent mode (chat mode does not invoke tools).
@@ -95,7 +99,7 @@ In `settings.json`:
 ```json
 {
   "context_servers": {
-    "emodul": { "command": { "path": "emodul", "args": ["mcp"] } }
+    "emodul": { "command": "emodul", "args": ["mcp"] }
   }
 }
 ```
@@ -323,3 +327,4 @@ Full reference: [SKILL.md](SKILL.md) (installed at
 | `No module selected` | Default udid not set | `emodul modules select <name>` (CLI) or `set_default_module` (MCP) |
 | MCP server shows 0 tools in Inspector | Wrong invocation | check `command: "emodul", args: ["mcp"]` |
 | Claude Desktop times out at 60s | Known client limit | use `wait=False` on write tools; don't request multi-month stats |
+| `login_browser` tool times out in Claude Desktop | Tool's 300s default ≫ Claude Desktop's 60s ceiling | Run `emodul auth login --browser` from the host terminal once instead; MCP `login_browser` tool is best for clients with `resetTimeoutOnProgress` support (Cursor, future Claude Desktop versions) |

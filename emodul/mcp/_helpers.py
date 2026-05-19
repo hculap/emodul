@@ -78,8 +78,21 @@ def safely(fn):
     """Decorator: convert known exceptions into error envelopes.
 
     Tools should NEVER raise to the top level — that kills the MCP server.
+    Fail loudly at decoration time if applied to a sync function (otherwise
+    `await fn(...)` would silently TypeError into an opaque "Internal error"
+    envelope).
     """
+    import asyncio
     import functools
+    import logging
+
+    if not asyncio.iscoroutinefunction(fn):
+        raise TypeError(
+            f"@safely requires `async def`; got plain function {fn.__name__!r}. "
+            "MCP tools must be async (they use anyio.to_thread internally)."
+        )
+
+    log = logging.getLogger(f"emodul.mcp.tool.{fn.__name__}")
 
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
@@ -88,6 +101,11 @@ def safely(fn):
         except AuthRequired as exc:
             return err_response(str(exc), code="auth_required")
         except EmodulApiError as exc:
+            # Log at warning — recoverable / expected operational failure.
+            log.warning(
+                "api_error status=%s path=%s body=%r",
+                exc.status, exc.path, exc.body,
+            )
             return err_response(
                 f"eModul API {exc.status} on {exc.path}: {exc.body}",
                 code="api_error",
@@ -98,6 +116,13 @@ def safely(fn):
         except ValueError as exc:
             return err_response(str(exc), code="bad_input")
         except Exception as exc:  # noqa: BLE001
-            return err_response(f"Internal error: {exc!r}", code="internal")
+            # Full traceback to stderr (operator-visible via MCP server logs).
+            # User-facing message stays terse — never echo repr(exc) since
+            # httpx-like errors may include the request URL with user_id.
+            log.exception("tool crashed: %s", type(exc).__name__)
+            return err_response(
+                f"Internal error in tool (see server logs): {type(exc).__name__}",
+                code="internal",
+            )
 
     return wrapper

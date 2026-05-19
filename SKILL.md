@@ -14,7 +14,7 @@ Every command supports `--json` for machine-parseable output. The user's setup t
 
 **Two ways an AI agent can drive it**:
 - **CLI directly** (this skill — for Claude Code / Codex CLI / Cursor agent mode / Aider). Run `emodul <subcommand> --json` from bash.
-- **MCP server** (for Claude Desktop / Cursor chat / Continue / Cline / Zed / JetBrains). Add `{"command": "emodul", "args": ["mcp"]}` to the client's MCP config. ~16 tools available natively. See [AGENT.md](README.md) Path A.
+- **MCP server** (for Claude Desktop / Cursor chat / Continue / Cline / Zed / JetBrains). Add `{"command": "emodul", "args": ["mcp"]}` to the client's MCP config. 16 tools available natively. See [AGENT.md](AGENT.md) Path A.
 
 **Binary**: `emodul` (installed via `pipx install emodul`; falls back to `pip install --user emodul`)
 **Run from**: any directory (binary uses absolute config path)
