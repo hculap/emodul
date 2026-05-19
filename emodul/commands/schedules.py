@@ -10,57 +10,9 @@ from __future__ import annotations
 import click
 from rich.table import Table
 
-from emodul.format import console, dump_json, flatten_zones
-
-DAY_NAMES = ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"]
-
-
-def _intervals(raw: list[dict]) -> list[dict]:
-    """Strip placeholder intervals (start > 1440) and decode to readable form."""
-    out = []
-    for it in raw or []:
-        if it.get("start", 9999) > 1440:
-            continue
-        out.append(
-            {
-                "start": _hhmm(it["start"]),
-                "stop": _hhmm(it["stop"]),
-                "temp_c": it["temp"] / 10,
-            }
-        )
-    return out
-
-
-def _hhmm(m: int) -> str:
-    return f"{m // 60:02d}:{m % 60:02d}"
-
-
-def _days_mask(mask: list[str]) -> str:
-    return " ".join(d if v == "1" else "—" for d, v in zip(DAY_NAMES, mask, strict=False))
-
-
-def _decode_schedule(s: dict) -> dict:
-    return {
-        "index": s.get("index"),
-        "id": s.get("id"),
-        "name": s.get("name") or "(unnamed)",
-        "p0_days": _days_mask(s.get("p0Days") or ["0"] * 7),
-        "p0_intervals": _intervals(s.get("p0Intervals") or []),
-        "p0_setback_c": (s.get("p0SetbackTemp") or 0) / 10,
-        "p1_days": _days_mask(s.get("p1Days") or ["0"] * 7),
-        "p1_intervals": _intervals(s.get("p1Intervals") or []),
-        "p1_setback_c": (s.get("p1SetbackTemp") or 0) / 10,
-    }
-
-
-def _zones_using(snapshot: dict, sched_idx: int) -> list[str]:
-    """Names of zones referencing this globalSchedule index."""
-    rows = flatten_zones(snapshot)
-    return [
-        r["name"]
-        for r in rows
-        if r.get("mode") == "globalSchedule" and r.get("schedule_index") == sched_idx
-    ]
+from emodul._schedule_format import decode_schedule as _decode_schedule
+from emodul._schedule_format import zones_using_schedule as _zones_using
+from emodul.format import console, dump_json
 
 
 def register(cli: click.Group, wrap) -> None:

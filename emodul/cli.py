@@ -38,39 +38,25 @@ class Ctx:
         self.config = new_cfg
 
     def resolve_module_udid(self, query_or_none: str | None) -> str:
-        """Resolve -m argument: full udid, partial udid prefix, or name substring.
+        """Resolve -m argument via shared helper; cache modules per process."""
+        from emodul._resolver import resolve_module_udid as _resolve
 
-        Defaults to config.default_udid when nothing passed.
-        """
         q = query_or_none or self.config.default_udid
         if not q:
             raise SystemExit(
                 "No module selected. Pass -m <udid|name> or run "
                 "`emodul modules select <udid|name>`."
             )
-        # Fast path: looks like a full hex udid (32 chars) — assume it's the udid.
+        # Fast path skips API call when caller already gave a full udid.
         if len(q) == 32 and all(c in "0123456789abcdef" for c in q.lower()):
             return q
-        # Otherwise, look it up against the module list (cached per Ctx).
         if self._module_cache is None:
             with self.api() as api:
                 self._module_cache = api.list_modules()
-        ql = q.lower()
-        for m in self._module_cache:
-            if (m.get("udid") or "").lower() == ql:
-                return m["udid"]
-        for m in self._module_cache:
-            if (m.get("udid") or "").lower().startswith(ql):
-                return m["udid"]
-        matches = [m for m in self._module_cache if ql in (m.get("name") or "").lower()]
-        if len(matches) == 1:
-            return matches[0]["udid"]
-        if not matches:
-            raise SystemExit(f"No module matches {q!r}.")
-        raise SystemExit(
-            f"Ambiguous module {q!r}: matched "
-            f"{', '.join(m.get('name','?') for m in matches)}"
-        )
+        try:
+            return _resolve(q, self._module_cache, self.config.default_udid)
+        except (LookupError, ValueError) as exc:
+            raise SystemExit(str(exc)) from exc
 
     def api(self) -> ApiClient:
         refresher = (
