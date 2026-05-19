@@ -68,7 +68,7 @@ TOOLS (16):
 list_schedules, audit_settings, get_alarms, get_temperature_history
 - WRITE (destructiveHint=true, client prompts for confirmation): \
 set_zone_temperature, boost_zone, toggle_zone, attach_schedule, update_setting
-- AUTH: login_browser, set_default_module
+- AUTH: login_browser, logout, set_default_module
 
 WORKFLOW:
 1. whoami → if token_present=false, call login_browser. It returns the login \
@@ -939,6 +939,57 @@ async def login_browser(
             "the user's browser."
         ),
     )
+
+
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=True, idempotentHint=True))
+@safely
+async def logout(clear_keychain: bool = False) -> dict:
+    """Clear the stored token (and optionally the keychain password).
+
+    Args:
+        clear_keychain: If True, also delete the password stored in the OS
+            keychain — auto-refresh on the next 401 will then fail until the
+            user runs `login_browser` again. Default False (token gone but
+            password retained, so `login_browser` can re-auth without the
+            user typing their password again on next login).
+
+    Returns: `{ok, email, keychain_cleared, message}`.
+    """
+    from emodul import auth as auth_kc
+    from emodul.config import Config
+
+    def _impl() -> dict:
+        cfg = Config.load()
+        had_token = bool(cfg.token)
+        email = cfg.email
+        new_cfg = cfg.with_updates(token=None, user_id=None)
+        new_cfg.save()
+        keychain_cleared = False
+        if clear_keychain and email:
+            try:
+                keychain_cleared = auth_kc.delete_password(email)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("keychain delete failed: %s", exc)
+                keychain_cleared = False
+        msg = (
+            "Token cleared from config.json"
+            if had_token
+            else "No token was stored; nothing to clear"
+        )
+        if clear_keychain:
+            msg += (
+                f"; keychain entry for {email!r} deleted"
+                if keychain_cleared
+                else "; keychain entry NOT removed"
+            )
+        return ok_response(
+            email=email,
+            keychain_cleared=keychain_cleared,
+            had_token=had_token,
+            message=msg,
+        )
+
+    return await anyio.to_thread.run_sync(_impl)
 
 
 @mcp.tool()
