@@ -190,9 +190,67 @@ def register(cli: click.Group, wrap) -> None:
         dump_json({"email": ctx.config.email, "removed": ok})
 
     @auth.command("logout")
+    @click.option(
+        "--clear-keychain",
+        is_flag=True,
+        help="Also delete the password from the OS keychain (disables "
+        "auto-refresh). Equivalent to also running `auth forget-password`.",
+    )
     @click.pass_obj
-    def logout(ctx) -> None:
-        """Clear stored token + user_id (keep default udid)."""
+    def logout(ctx, clear_keychain: bool) -> None:
+        """Clear stored token + user_id (keep default udid).
+
+        With --clear-keychain, also remove the keychain password so the
+        next auth attempt requires a fresh `auth login`.
+        """
+        email = ctx.config.email
+        had_token = bool(ctx.config.token)
         new_cfg = ctx.config.with_updates(token=None, user_id=None)
         new_cfg.save()
-        console.print("[yellow]Local credentials cleared.[/yellow]")
+
+        keychain_status = "skipped"
+        if clear_keychain:
+            if not email:
+                keychain_status = "no_email"
+            else:
+                existed = auth_kc.get_password(email) is not None
+                if not existed:
+                    keychain_status = "not_found"
+                else:
+                    keychain_status = (
+                        "deleted" if auth_kc.delete_password(email) else "error"
+                    )
+
+        if ctx.json:
+            dump_json(
+                {
+                    "had_token": had_token,
+                    "token_cleared": had_token,
+                    "email": email,
+                    "keychain_status": keychain_status,
+                }
+            )
+            return
+
+        token_msg = (
+            "[yellow]Local credentials cleared.[/yellow]"
+            if had_token
+            else "[dim]No token was stored.[/dim]"
+        )
+        console.print(token_msg)
+        if clear_keychain:
+            kc_lines = {
+                "deleted": f"[yellow]Keychain entry for {email} deleted.[/yellow]",
+                "not_found": (
+                    f"[dim]No keychain entry found for {email}.[/dim]"
+                ),
+                "no_email": (
+                    "[red]Cannot remove keychain entry — config has no email. "
+                    "Use `security find-generic-password -s emodul` to inspect "
+                    "manually.[/red]"
+                ),
+                "error": (
+                    f"[red]Keychain delete failed for {email}.[/red]"
+                ),
+            }
+            console.print(kc_lines.get(keychain_status, ""))
