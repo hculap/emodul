@@ -1,12 +1,21 @@
 # emodul
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Claude Skill](https://img.shields.io/badge/Claude-Skill%20ready-D97757.svg)](SKILL.md)
+[![GitHub stars](https://img.shields.io/github/stars/hculap/emodul?style=social)](https://github.com/hculap/emodul/stargazers)
+
 Unofficial Python CLI for the **Tech Sterowniki eModul.pl** cloud
 (Polish floor-heating controllers: L-4X WIFI, L-8, L-9, L-12, etc.).
 
 Reverse-engineered from the Angular SPA bundle, hardened against bugs
 found in the community [`tech-controllers`](https://github.com/mariusz-ostoja-swierczynski/tech-controllers)
-Home Assistant integration, and designed to be driven both interactively
-and by an AI agent.
+Home Assistant integration, and **designed to be driven by AI agents**
+out of the box via the bundled `SKILL.md`.
+
+> ⚠️ **Unofficial.** Not affiliated with TECH Sterowniki Sp. z o.o. or eModul.pl.
+> Use against your own account only. The vendor may rate-limit or invalidate
+> tokens at any time.
 
 ```text
 emodul status                          → live zone table with action (heating/idle)
