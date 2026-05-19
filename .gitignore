@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+
+# Local config and any saved API dumps (contain tokens / personal data)
+benchamr/
+probes/
+config.local.json
+*.token
+.env
