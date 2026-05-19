@@ -269,11 +269,16 @@ _HTML_FORM = """<!DOCTYPE html>
       e.preventDefault();
       btn.disabled = true;
       btn.textContent = 'Signing in…';
-      const formData = new FormData(form);
+      // URLSearchParams sends `application/x-www-form-urlencoded` (which
+      // the server parses via parse_qs). Passing FormData directly would
+      // make fetch use `multipart/form-data` and the server reads empty
+      // fields — the "Email and password are required" bug we shipped
+      // in 0.1.2..0.1.6.
+      const params = new URLSearchParams(new FormData(form));
       try {
         const resp = await fetch(
           '/submit?state=' + encodeURIComponent(state),
-          { method: 'POST', body: formData }
+          { method: 'POST', body: params }
         );
         const data = await resp.json();
         if (data.ok) {
