@@ -6,7 +6,7 @@ Recommendations are heuristic, tuned for Polish floor heating on a TECH L-4X WIF
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,55 @@
+name: Publish to PyPI
+
+# Triggered when you push a tag like `v0.2.0`.
+# Requires PYPI_API_TOKEN secret to be set in repo settings:
+#   Settings → Secrets and variables → Actions → New repository secret
+#   Name:  PYPI_API_TOKEN
+#   Value: <token from https://pypi.org/manage/account/token/>
+#
+# Or use OIDC trusted publishing (preferred): https://docs.pypi.org/trusted-publishers/
+# In which case remove the `password:` line and set `id-token: write` permission.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: pip install build
+
+      - name: Build
+        run: python -m build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Upload to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/emodul/
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

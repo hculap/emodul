@@ -36,7 +36,7 @@ def _hhmm(m: int) -> str:
 
 
 def _days_mask(mask: list[str]) -> str:
-    return " ".join(d if v == "1" else "—" for d, v in zip(DAY_NAMES, mask))
+    return " ".join(d if v == "1" else "—" for d, v in zip(DAY_NAMES, mask, strict=False))
 
 
 def _decode_schedule(s: dict) -> dict:

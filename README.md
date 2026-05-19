@@ -1,5 +1,6 @@
 # emodul
 
+[![CI](https://github.com/hculap/emodul/actions/workflows/ci.yml/badge.svg)](https://github.com/hculap/emodul/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Claude Skill](https://img.shields.io/badge/Claude-Skill%20ready-D97757.svg)](SKILL.md)
@@ -389,6 +390,16 @@ emodul/
   show` hides them by default; opt-in with `--include-locked`.
 
 ---
+
+## Contributing
+
+PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, where
+new endpoints belong, and how to anonymise bug reports. Project follows
+the [Contributor Covenant](CODE_OF_CONDUCT.md).
+
+Have a different TECH controller (L-8, L-9, L-12, …)? Try `emodul status`
+against your account and open an issue with whatever breaks — most things
+should "just work" since the API shape is shared across models.
 
 ## Acknowledgements
 

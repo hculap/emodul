@@ -9,7 +9,18 @@ import click
 from emodul import __version__
 from emodul.api import ApiClient, EmodulApiError
 from emodul.auth import make_refresher
-from emodul.commands import alarms, auth, menu, misc, modules, schedules, settings, stats, watch, zones
+from emodul.commands import (
+    alarms,
+    auth,
+    menu,
+    misc,
+    modules,
+    schedules,
+    settings,
+    stats,
+    watch,
+    zones,
+)
 from emodul.config import Config
 from emodul.format import dump_json, err_console
 

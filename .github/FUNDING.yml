@@ -1,0 +1,11 @@
+# Enable GitHub Sponsors / external funding links to appear on the repo
+# sidebar. Uncomment + fill in only what you actually use — leaving keys
+# commented hides the "Sponsor this project" button entirely.
+#
+# Reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# github: [hculap]                 # Your GitHub Sponsors handle
+# ko_fi: yourhandle                # https://ko-fi.com/yourhandle
+# buy_me_a_coffee: yourhandle      # https://buymeacoffee.com/yourhandle
+# patreon: yourhandle              # https://patreon.com/yourhandle
+# custom: ['https://example.com/donate']

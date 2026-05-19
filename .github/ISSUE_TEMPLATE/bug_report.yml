@@ -1,0 +1,55 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Before submitting, please **anonymise** your
+        output — do not paste your JWT, `user_id`, `udid`, full controller
+        name, or other personal data.
+
+  - type: input
+    id: version
+    attributes:
+      label: emodul version
+      description: Output of `emodul --version`
+      placeholder: "emodul, version 0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: controller
+    attributes:
+      label: Controller model
+      description: From `emodul --json modules list` (the `version` field)
+      placeholder: "TECH: L-4X WIFI (v.1.0.13)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command + output
+      description: |
+        Paste the command and its stdout/stderr. Run with `--json` if
+        possible so the output is parseable.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: macOS / Linux distro, Python version, anything special
+      placeholder: "macOS 14.5, Python 3.12.3"
+    validations:
+      required: false

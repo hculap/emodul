@@ -6,7 +6,6 @@ macOS (launchd) and Linux (systemd --user) so it survives reboots.
 from __future__ import annotations
 
 import os
-import platform
 import shutil
 import signal
 import subprocess

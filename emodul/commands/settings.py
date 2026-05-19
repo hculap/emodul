@@ -212,8 +212,8 @@ def register(cli: click.Group, wrap) -> None:
                     if wait:
                         pin_chain = _pin_chain(ctx.config, udid, s.menu_type) or None
                         settled = api.wait_until_settled(
-                            lambda u=udid: api.is_menu_item_settled(
-                                u, s.menu_type, s.ido, pin_chain=pin_chain
+                            lambda u=udid, pc=pin_chain: api.is_menu_item_settled(
+                                u, s.menu_type, s.ido, pin_chain=pc
                             ),
                             timeout=timeout,
                         )

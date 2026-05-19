@@ -28,7 +28,7 @@ MENU_TYPES = {
 def _normalize_menu(t: str) -> str:
     if t not in MENU_TYPES:
         raise click.BadParameter(
-            f"menu type must be one of: MU MI MS MP (or aliases: user/fitters/service/manufacturer)"
+            "menu type must be one of: MU MI MS MP (or aliases: user/fitters/service/manufacturer)"
         )
     return MENU_TYPES[t]
 
