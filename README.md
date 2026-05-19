@@ -57,11 +57,21 @@ See [AGENT.md](AGENT.md) for full per-runtime configs.
 
 ```bash
 pipx install emodul
-emodul auth login --browser       # one-time login
-emodul skill install              # so Claude Code (Path B) shares the same skill
+emodul auth login --browser       # one-time login (opens a local form)
+emodul install claude-desktop     # drops MCP-flavored skill + writes the
+                                  # mcpServers.emodul entry into your
+                                  # claude_desktop_config.json (with backup)
 ```
 
-Then in `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Quit & reopen Claude Desktop (⌘+Q on macOS) → ask *"what's the temperature in Salon?"* and Claude calls the MCP tool natively.
+
+For both Claude Code AND Claude Desktop in one go:
+
+```bash
+emodul install --all
+```
+
+Manual variant (if you'd rather edit the JSON yourself):
 
 ```json
 {
@@ -73,8 +83,6 @@ Then in `~/Library/Application Support/Claude/claude_desktop_config.json`:
   }
 }
 ```
-
-Restart Claude Desktop → ask *"what's the temperature in Salon?"* and Claude calls the MCP tool natively.
 
 ### Path B in 30 seconds — Claude Code (or any CLI agent)
 
@@ -98,13 +106,17 @@ pipx install emodul         # isolated install, recommended
 pip install emodul          # plain pip (use a venv on PEP-668 systems)
 ```
 
-After install, to expose the bundled Claude Skill:
+After install, wire emodul into your AI clients:
 
 ```bash
-emodul skill install        # → ~/.claude/skills/emodul/SKILL.md
-# OR
-emodul skill install --symlink   # live-updates on `pipx upgrade emodul`
+emodul install claude-code       # CLI-flavored skill for Claude Code / Codex CLI
+emodul install claude-desktop    # MCP-flavored skill + mcpServers config for Claude Desktop
+emodul install --all             # both at once (only what's detected)
+emodul install --dry-run         # preview without writing
+emodul uninstall claude-desktop  # reverse it
 ```
+
+Each install creates a timestamped `.bak-…` of any config it touches; the last 5 are kept. Pass `--force` to overwrite an existing `mcpServers.emodul` entry whose arguments differ.
 
 Verify:
 

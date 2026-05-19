@@ -1,6 +1,6 @@
 [project]
 name = "emodul"
-version = "0.1.3"
+version = "0.1.4"
 description = "Unofficial Python CLI + MCP server for Tech Sterowniki / eModul.pl floor-heating controllers. AI-agent ready."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -57,3 +57,4 @@ packages = ["emodul"]
 # after `pip install emodul`. Source remains at repo root for GitHub UI.
 [tool.hatch.build.targets.wheel.force-include]
 "SKILL.md" = "emodul/SKILL.md"
+"SKILL_MCP.md" = "emodul/SKILL_MCP.md"
