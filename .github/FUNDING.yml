@@ -4,7 +4,7 @@
 #
 # Reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
 
-# github: [hculap]                 # Your GitHub Sponsors handle
+github: [hculap]                   # Your GitHub Sponsors handle
 # ko_fi: yourhandle                # https://ko-fi.com/yourhandle
 # buy_me_a_coffee: yourhandle      # https://buymeacoffee.com/yourhandle
 # patreon: yourhandle              # https://patreon.com/yourhandle
