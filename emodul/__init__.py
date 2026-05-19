@@ -1,3 +1,3 @@
 """Unofficial Python client + CLI for the Tech Sterowniki eModul.pl API."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
