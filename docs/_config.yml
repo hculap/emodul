@@ -1,0 +1,23 @@
+title: emodul
+description: >-
+  Lokalne CLI + serwer MCP do sterowania ogrzewaniem podłogowym TECH
+  Sterowniki / eModul.pl. Działa z Claude Desktop, Cursor, Continue, Cline,
+  Zed, JetBrains AI, Claude Code i Codex CLI.
+url: "https://hculap.github.io/emodul"
+repository: hculap/emodul
+
+theme: jekyll-theme-cayman
+
+show_downloads: true
+
+# Cayman theme metadata
+google_analytics:
+
+# Don't render these top-level paths
+exclude:
+  - emodul/
+  - .venv/
+  - .github/
+  - Makefile
+  - pyproject.toml
+  - "*.py"

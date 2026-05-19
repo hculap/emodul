@@ -1,10 +1,13 @@
 # emodul
 
 [![CI](https://github.com/hculap/emodul/actions/workflows/ci.yml/badge.svg)](https://github.com/hculap/emodul/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/emodul.svg)](https://pypi.org/project/emodul/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Claude Skill](https://img.shields.io/badge/Claude-Skill%20ready-D97757.svg)](SKILL.md)
 [![GitHub stars](https://img.shields.io/github/stars/hculap/emodul?style=social)](https://github.com/hculap/emodul/stargazers)
+
+📖 **[Landing page](https://hculap.github.io/emodul/)** · 📜 **[Changelog](CHANGELOG.md)** · 🔌 **[PyPI](https://pypi.org/project/emodul/)** · 🤖 **[AGENT.md](AGENT.md)**
 
 Unofficial Python CLI for the **Tech Sterowniki eModul.pl** cloud
 (Polish floor-heating controllers: L-4X WIFI, L-8, L-9, L-12, etc.).
