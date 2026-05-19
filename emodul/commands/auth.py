@@ -13,9 +13,37 @@ def register(cli: click.Group, wrap) -> None:
         """Manage API credentials."""
 
     @auth.command("login")
-    @click.option("--email", prompt=True)
-    @click.password_option("--password", confirmation_prompt=False)
+    @click.option("--email", default=None,
+                  help="(terminal flow only — ignored with --browser)")
+    @click.option("--password", default=None,
+                  help="(terminal flow only — ignored with --browser)")
     @click.option("--language-id", default=18, show_default=True, help="18 = Polish.")
+    @click.option(
+        "--browser/--terminal",
+        "use_browser",
+        default=None,
+        help="Browser flow opens a local form (password never seen by the agent). "
+        "Terminal flow prompts in stdin. Default: browser when stdin is not a TTY "
+        "(AI-agent context), terminal when interactive.",
+    )
+    @click.option(
+        "--port",
+        type=int,
+        default=None,
+        help="[--browser] Local bind port. Default: random free port.",
+    )
+    @click.option(
+        "--no-open",
+        is_flag=True,
+        help="[--browser] Don't auto-open the browser; print URL only.",
+    )
+    @click.option(
+        "--timeout",
+        type=int,
+        default=300,
+        show_default=True,
+        help="[--browser] Seconds to wait for the user to submit the form.",
+    )
     @click.option(
         "--no-keychain",
         is_flag=True,
@@ -24,23 +52,61 @@ def register(cli: click.Group, wrap) -> None:
     @click.pass_obj
     @wrap
     def login(
-        ctx, email: str, password: str, language_id: int, no_keychain: bool
+        ctx,
+        email: str | None,
+        password: str | None,
+        language_id: int,
+        use_browser: bool | None,
+        port: int | None,
+        no_open: bool,
+        timeout: int,
+        no_keychain: bool,
     ) -> None:
         """Exchange username + password for a JWT and (by default) store the
-        password in the OS keychain so the CLI can auto-refresh on 401."""
-        with ctx.api() as api:
-            body = api.authenticate(email, password, language_id)
-        token = body.get("token")
-        user_id = body.get("user_id")
-        if not token or not user_id:
-            raise SystemExit(f"Unexpected auth response: {body}")
+        password in the OS keychain so the CLI can auto-refresh on 401.
+
+        Two flows:
+        - Browser (recommended for AI-agent contexts): opens a local
+          127.0.0.1 form. Agent never sees the password.
+        - Terminal: classic stdin prompt.
+        """
+        import sys
+
+        if use_browser is None:
+            use_browser = not sys.stdin.isatty()
+
+        if use_browser:
+            from emodul.web_auth import web_login_flow
+            result = web_login_flow(
+                base_url=ctx.config.base_url,
+                language_id=language_id,
+                open_browser=not no_open,
+                port=port,
+                timeout=timeout,
+            )
+            token = result["token"]
+            user_id = result["user_id"]
+            email = result["email"]
+            password = result["password"]
+        else:
+            if not email:
+                email = click.prompt("Email")
+            if not password:
+                password = click.prompt("Password", hide_input=True)
+            with ctx.api() as api:
+                body = api.authenticate(email, password, language_id)
+            token = body.get("token")
+            user_id = body.get("user_id")
+            if not token or not user_id:
+                raise SystemExit(f"Unexpected auth response: {body}")
+
         new_cfg = ctx.config.with_updates(
             token=token, user_id=int(user_id), email=email
         )
         new_cfg.save()
         ctx.config = new_cfg
         keychain_ok = False
-        if not no_keychain:
+        if not no_keychain and password:
             try:
                 auth_kc.set_password(email, password)
                 keychain_ok = True
@@ -51,11 +117,19 @@ def register(cli: click.Group, wrap) -> None:
                 )
         if ctx.json:
             dump_json(
-                {"user_id": user_id, "token_saved": True, "auto_refresh": keychain_ok}
+                {
+                    "user_id": user_id,
+                    "email": email,
+                    "token_saved": True,
+                    "auto_refresh": keychain_ok,
+                    "flow": "browser" if use_browser else "terminal",
+                }
             )
         else:
             extra = "[dim](auto-refresh on)[/dim]" if keychain_ok else ""
-            console.print(f"[green]Logged in as user_id={user_id}.[/green] {extra}")
+            console.print(
+                f"[green]Logged in as {email} (user_id={user_id}).[/green] {extra}"
+            )
 
     @auth.command("import-token")
     @click.argument("token")

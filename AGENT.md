@@ -53,23 +53,40 @@ For other harnesses (Codex, Gemini), use `emodul skill install --to /path/...`
 to put it where they expect skills, or read `emodul skill show` and feed
 the contents into the agent's own skill mechanism.
 
-### Step 3 — Authenticate
-
-Ask the user for their **eModul.pl email**. Then run:
+### Step 3 — Authenticate (browser flow — password never leaves the user)
 
 ```bash
-emodul auth login --email <user-email>
+emodul auth login --browser
 ```
 
-This will prompt the user (interactively) for their password. The password
-is stored in the OS keychain (macOS Keychain / GNOME Keyring / KWallet) so
-the CLI silently re-authenticates on any future 401.
+The CLI:
+1. Spins up a local HTTP server on `http://127.0.0.1:<random-port>/`
+2. Opens the user's default browser to a sign-in form (Apple-system UI,
+   dark-mode aware)
+3. Waits up to 5 minutes for the user to type their credentials and submit
+4. Calls the eModul auth endpoint, captures the JWT, stores it locally,
+   and the page shows a green ✓
+5. Returns to the agent with exit code 0
+
+**You — the agent — never see the password.** You only see the success
+signal: `Logged in as <email> (user_id=N).` This is the same trust model
+as `gh auth login`, `gcloud auth login`, etc.
+
+If `webbrowser.open()` fails (headless host, WSL without browser), the
+CLI prints the URL — read it from stderr, hand it to the user.
+
+Flags:
+- `--browser` (default for non-TTY contexts like AI agents) vs `--terminal`
+  (default for interactive TTY)
+- `--no-open` — print URL only, don't try to auto-open
+- `--port N` — custom port (default: random free)
+- `--timeout SECONDS` — default 300
 
 Alternative if the user already has a JWT (from browser DevTools → Local
 Storage → `token` on emodul.pl):
 
 ```bash
-emodul auth import-token "<jwt>" --user-id <user-id>
+emodul auth import-token "<jwt>" --user-id <user-id> --email <email>
 ```
 
 Verify:
@@ -78,7 +95,8 @@ Verify:
 emodul --json auth whoami
 ```
 
-Expected: `user_id`, `token_present: true`, `server_info` populated.
+Expected: `user_id`, `email`, `token_present: true`, `auto_refresh: true`,
+`server_info` populated.
 
 ### Step 4 — Pick a default controller
 

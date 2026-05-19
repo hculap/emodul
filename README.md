@@ -104,16 +104,33 @@ things clean. `pipx` handles this automatically. Activate the venv with
 
 ## First-time setup
 
-Either log in (recommended — enables silent JWT auto-refresh):
+### Browser flow (recommended — best when an AI agent is driving)
 
 ```bash
-emodul auth login --email you@example.com
+emodul auth login --browser
 ```
 
-Stores the JWT in `~/.config/emodul/config.json` (chmod 600) and your password
-in the OS keychain (Keychain on macOS, GNOME Keyring / KWallet on Linux,
-Credential Locker on Windows). On any future 401, the CLI silently re-auths
-and retries the request once. Opt out with `--no-keychain`. Remove the
+Opens a local sign-in page (`http://127.0.0.1:<random-port>/`) with an
+Apple-style form (dark-mode aware). You type your eModul.pl credentials
+into the **browser** — the CLI captures the JWT and stores it. The agent
+running this command never sees your password.
+
+The flow auto-selects: `--browser` when stdin isn't a TTY (agent
+context), `--terminal` when interactive. Override with explicit
+`--terminal` / `--browser`.
+
+### Terminal flow (interactive)
+
+```bash
+emodul auth login --terminal --email you@example.com
+```
+
+Prompts for the password in stdin.
+
+Either way, the JWT lands in `~/.config/emodul/config.json` (chmod 600)
+and your password in the OS keychain (Keychain on macOS, GNOME Keyring /
+KWallet on Linux, Credential Locker on Windows). On any future 401 the
+CLI silently re-authenticates. Opt out with `--no-keychain`. Remove the
 password with `emodul auth forget-password`.
 
 …or paste a JWT you already have (e.g. from DevTools → Application → Local

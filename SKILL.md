@@ -197,7 +197,8 @@ Database: `~/.local/state/emodul/state.db` (SQLite). Tables: `tile_events` (Pomp
 
 ```bash
 emodul auth whoami                                    # who am I + auto-refresh status
-emodul auth login --email <e>                         # password prompt → keychain → JWT
+emodul auth login --browser                           # opens local 127.0.0.1 form — agent never sees password (RECOMMENDED in agent contexts)
+emodul auth login --terminal --email <e>              # classic stdin prompt (interactive only)
 emodul auth import-token "<jwt>" --user-id <id>       # paste JWT manually
 emodul i18n lookup 873                                # txtId 873 → "Wersja modułu"
 emodul poll                                           # one-shot delta poll (15s SPA cadence)
