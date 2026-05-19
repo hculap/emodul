@@ -1,7 +1,7 @@
 ---
 name: emodul
 description: |
-  Controls a Polish Tech Sterowniki / eModul.pl floor-heating system via a local Python CLI. Reads zones, sets setpoints, attaches schedules, audits configuration, pulls historical stats, runs a background SQLite transition logger. Use whenever the user mentions heating, room temperature, floor heating, ogrzewanie, any room thermostat ("Salon", "Łazienka", "Sypialnia", "Pokój", "Biuro", "Garaż", "Kuchnia", "Parter", "Piętro"), wants to "set", "change", "raise", "boost", "turn on/off" any zone, asks to "check" or "audit" heating, asks about TECH controllers (L-4X, L-8, L-12), eModul cloud, weekly heating schedules, serwis menu / PIN 5162, alarm history, or historical temperature data. Also triggers on Polish: "ustaw temperaturę", "podgrzej", "włącz/wyłącz ogrzewanie", "ile stopni", "harmonogram grzania". This CLI is the ONLY safe interface — never curl the API directly.
+  Controls a Polish Tech Sterowniki / eModul.pl floor-heating system via a local Python CLI. Reads zones, sets setpoints, attaches schedules, audits configuration, pulls historical stats, runs a background SQLite transition logger. Use whenever the user mentions heating, room temperature, floor heating, ogrzewanie, any room thermostat (typical Polish zone names: "Salon", "Łazienka", "Sypialnia", "Pokój", "Biuro", "Garaż", "Kuchnia"), wants to "set", "change", "raise", "boost", "turn on/off" any zone, asks to "check" or "audit" heating, asks about TECH controllers (L-4X, L-8, L-12), eModul cloud, weekly heating schedules, serwis menu / PIN 5162, alarm history, or historical temperature data. Also triggers on Polish: "ustaw temperaturę", "podgrzej", "włącz/wyłącz ogrzewanie", "ile stopni", "harmonogram grzania". This CLI is the ONLY safe interface — never curl the API directly.
 ---
 
 # emodul — Tech Sterowniki / eModul.pl CLI skill
@@ -10,7 +10,7 @@ description: |
 
 `emodul` is a Python CLI (and MCP server) for the eModul.pl cloud API used by Polish Tech Sterowniki floor-heating controllers (L-4X WIFI, L-8, L-9, L-12). It handles JWT auth with keychain-backed refresh, exposes both raw and high-level (named-slug) parameter control, decodes Polish menu trees, and bundles a long-running watcher that logs relay/zone transitions to SQLite.
 
-Every command supports `--json` for machine-parseable output. The user's setup typically has 1-2 controllers ("Parter" = ground floor, "Piętro" = upstairs) with 3-5 zones each.
+Every command supports `--json` for machine-parseable output. A typical install has 1–2 controllers with 3–5 zones each; controllers are named freely by the user (e.g. one per floor, one per building). Discover what exists with `emodul --json modules list` — never assume specific module names.
 
 **Two ways an AI agent can drive it**:
 - **CLI directly** (this skill — for Claude Code / Codex CLI / Cursor agent mode / Aider). Run `emodul <subcommand> --json` from bash.
@@ -26,7 +26,7 @@ Every command supports `--json` for machine-parseable output. The user's setup t
 - **Writes block by default until settled** (~5-30 s) — the controller reports `duringChange:"t"` and OLD values for up to 30 s after a POST. The CLI waits; pass `--no-wait` only if the user explicitly wants fire-and-forget.
 - **Temperatures are Celsius with 0.1 °C precision**. The wire uses integer tenths (21.5 °C → 215) but the CLI handles conversion — always speak in °C to the user and the CLI.
 - **Zone selectors accept name OR id**. Names are matched case-insensitively as substrings (`Salon` matches; `salon` matches). If the user names a non-existent zone, the CLI exits with a clear error — don't retry with raw IDs.
-- **Module selectors (`-m`)** accept name substring (`Parter`), full udid (32 hex chars), or unique prefix. Without `-m` the CLI uses the default module (`emodul modules select <name>` once).
+- **Module selectors (`-m`)** accept a name substring, a full udid (32 hex chars), or a unique prefix. Without `-m` the CLI uses the default module (`emodul modules select <name>` once). Always call `emodul --json modules list` first to discover what names exist on this account.
 - **Never put PINs in `--json` outputs the user can see**. PIN 5162 (service menu MS) is stored automatically in config after `emodul menu unlock`. Don't log or echo it.
 - **Don't use `emodul raw POST/PUT/DELETE`** unless the user asks for an undocumented endpoint. There's a named command for every routine operation.
 - **Heating season matters**: in summer (May-Sep) the user often turns the furnace off, so zones may chronically sit below setpoint and the per-zone relay stays "off" even though the system "works". Don't diagnose hardware faults from temperature data alone during off-season.
@@ -110,7 +110,7 @@ emodul --json settings list                                       # inventory
 emodul --json settings show                                       # dashboard for default module
 emodul --json settings show --category safety                     # filter by category
 emodul --json settings show --include-locked                      # show items the server reports as access=false
-emodul --json settings get emergency-mode -m Parter
+emodul --json settings get emergency-mode -m <module>
 emodul settings set emergency-mode 30                             # writes; blocks until settled
 emodul settings set diagnostic-file off --all-modules             # mass-apply
 emodul --json settings audit                                      # bad/warn items + cross-module drift detection
@@ -123,9 +123,9 @@ Common slug names: `emergency-mode`, `hysteresis`, `sigma-range`, `weather-contr
 Each controller has exactly 5 globalSchedule slots (idx 0-4).
 
 ```bash
-emodul --json schedules list -m Parter       # all 5 with day mask, intervals, used-by zones
-emodul --json schedules show 0 -m Parter     # detail by index
-emodul --json schedules show "Sypialnia" -m Piętro    # detail by name
+emodul --json schedules list -m <module>     # all 5 with day mask, intervals, used-by zones
+emodul --json schedules show 0 -m <module>   # detail by index
+emodul --json schedules show "<zone-name>" -m <module>   # detail by name
 ```
 
 Schedules are decoded: day mask `Pn Wt Śr Cz Pt — —` (weekday), intervals as `06:00-21:00 → 21.5 °C`, setback temperature for off-hours.
@@ -133,7 +133,7 @@ Schedules are decoded: day mask `Pn Wt Śr Cz Pt — —` (weekday), intervals a
 ### `stats` — historical telemetry
 
 ```bash
-emodul --json stats available -m Parter                                # what series exist
+emodul --json stats available -m <module>                              # what series exist
 emodul --json stats linear --period day                                # today's per-zone temp curves
 emodul --json stats linear --period week
 emodul --json stats linear --month 4 --year 2026                       # specific month
@@ -152,9 +152,9 @@ Note: `--period day` and `--period week` are the only bare periods that work. `y
 
 ```bash
 emodul --json modules list                            # all controllers on the account
-emodul modules select "Parter"                        # set default module
-emodul modules show -m Piętro --zones-only            # zone snapshot
-emodul modules sync -m Parter                         # force fresh data pull (rate-limited)
+emodul modules select "<module>"                      # set default module (substitute name from `modules list`)
+emodul modules show -m <module> --zones-only          # zone snapshot
+emodul modules sync -m <module>                       # force fresh data pull (rate-limited)
 ```
 
 ### `alarms` — alarm/warning history
@@ -168,7 +168,7 @@ emodul alarms ack 123                                 # dismiss popup by id
 ### `tiles` — dashboard tiles (pumps, relays, version)
 
 ```bash
-emodul --json tiles list --translate -m Parter        # decodes txtId via Polish i18n
+emodul --json tiles list --translate -m <module>      # decodes txtId via Polish i18n
 ```
 
 Common tile types: `11` = Relay (e.g. "Pompa" = pump, "Styk beznapięciowy" = dry contact). Each has `params.workingStatus` bool.
@@ -176,11 +176,11 @@ Common tile types: `11` = Relay (e.g. "Pompa" = pump, "Styk beznapięciowy" = dr
 ### `menu` — raw MU/MI/MS access (advanced; prefer `settings`)
 
 ```bash
-emodul --json menu show MU -m Parter                  # user menu (no PIN)
-emodul --json menu show MI -m Parter                  # fitter menu (no PIN)
-emodul menu unlock MS 0 5162 -m Parter                # service-menu PIN — stored permanently
-emodul --json menu show MS -m Parter                  # subsequent reads auto-include PIN
-emodul menu set MI 3145755 30 -m Parter               # raw ido write (advanced)
+emodul --json menu show MU -m <module>                # user menu (no PIN)
+emodul --json menu show MI -m <module>                # fitter menu (no PIN)
+emodul menu unlock MS 0 5162 -m <module>              # service-menu PIN — stored permanently
+emodul --json menu show MS -m <module>                # subsequent reads auto-include PIN
+emodul menu set MI 3145755 30 -m <module>             # raw ido write (advanced)
 ```
 
 MP (manufacturer menu) PIN is **unknown** — don't try 5162 there, it returns 422.
@@ -230,12 +230,12 @@ emodul status                                         # alias for `zones list` w
 
 **Action field** (derived by CLI): `heating` (relay on + heating algorithm), `cooling`, `idle` (relay off, no demand), `off` (zone disabled or unknown).
 
-**Module names** (typical for this user): `Parter` (ground floor) and `Piętro` (upstairs). Both are TECH L-4X WIFI v1.0.13. Use them as `-m` argument directly.
+**Module discovery**: users name their controllers freely (per floor, per building, per room, anything). Never hardcode a name — call `emodul --json modules list` once, then use whatever the user actually has.
 
 **PIN-protected menus**:
 - MU (user) — no PIN
 - MI (fitters / installer) — no PIN
-- MS (service) — PIN **5162** (already stored in user's config)
+- MS (service) — PIN typically **5162** on TECH controllers; user runs `emodul menu unlock MS 0 5162` once and it's persisted
 - MP (manufacturer) — unknown PIN, don't try
 
 **Humidity**: `0` means "no sensor present", not 0% RH. The CLI returns `None` in JSON.
@@ -262,6 +262,7 @@ JSON output is canonical. Text output adds rich-table formatting that won't pars
 
 - **Auth state**: `~/.config/emodul/config.json` (chmod 600). Contains `{token, user_id, email, default_udid, pins}`.
 - **Password (optional)**: stored in OS keychain under service `emodul` for auto-refresh on 401. Set by `emodul auth login`.
+- **PINs**: per-controller service-menu PINs (typically `5162`) are stored in `config.json` under `pins.<udid>` AFTER the user runs `emodul menu unlock MS 0 <pin>` once. **Never** log, print, or include them in tool output the user can see.
 - **i18n cache**: `~/.config/emodul/i18n_pl.json` (~757 KB Polish dictionary). Refresh with `emodul i18n refresh` if menu labels look like `txtId 1234`.
 - **Watcher DB**: `~/.local/state/emodul/state.db` (SQLite WAL mode).
 - **Watcher service**: `~/Library/LaunchAgents/com.emodul.watcher.plist` (macOS) or `~/.config/systemd/user/emodul-watcher.service` (Linux).

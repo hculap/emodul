@@ -288,7 +288,7 @@ hand off cleanly.
 | "Ustaw Łazienkę na 22.5" | `set_zone_temperature(zone="Łazienka", celsius=22.5)` |
 | "Podgrzej Sypialnia na 23 na 2 godziny" | `boost_zone(zone="Sypialnia", celsius=23, minutes=120)` |
 | "Sprawdź czy ogrzewanie jest dobrze ustawione" | `audit_settings` |
-| "Pokaż harmonogramy na piętrze" | `list_schedules(module="Piętro")` |
+| "Pokaż harmonogramy w <module>" | `list_schedules(module="<module>")` |
 | "Wyłącz Garaż" | `toggle_zone(zone="Garaż", on=false)` |
 | "Were there any alarms?" | `get_alarms` |
 

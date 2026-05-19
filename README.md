@@ -169,7 +169,7 @@ Pick a default controller so `-m` becomes optional:
 
 ```bash
 emodul modules list
-emodul modules select Parter           # name substring works
+emodul modules select <module-name>    # name substring works (use a value from `modules list`)
 ```
 
 Cache the Polish translation dictionary (16,368 entries — used to resolve
@@ -369,7 +369,7 @@ The CLI is designed to be a clean tool surface for an LLM agent. Conventions:
 1. **`--json` on every command** for stable structured output. Default text
    output is human-friendly (rich tables, colors) but `--json` is canonical.
 2. **Module selector `-m`** accepts a full 32-char udid, a unique prefix
-   (e.g. `abc12345`), or a unique name substring (e.g. `Parter`).
+   (e.g. `abc12345`), or a unique name substring of whatever the user named their controller.
 3. **Slug-based settings** (`emodul settings list` enumerates all 25)
    instead of raw IDOs. The agent never has to know that
    "emergency-mode" lives at `MI:3145755:percent`.
