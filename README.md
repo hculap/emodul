@@ -45,15 +45,33 @@ emodul watch install-service           → launchd/systemd background poller →
 
 ## Install
 
+### From PyPI (recommended)
+
 ```bash
-cd /path/to/emodul
-python3 -m venv .venv
-.venv/bin/pip install -e .
+pipx install emodul         # isolated install, recommended
+# OR
+pip install emodul          # plain pip (use a venv on PEP-668 systems)
 ```
 
-(System Python on macOS is PEP-668 externally-managed; `.venv` keeps things
-clean. The installed entry point is `.venv/bin/emodul` — or activate the venv
-with `source .venv/bin/activate` for plain `emodul`.)
+Verify:
+
+```bash
+emodul --version
+```
+
+### From source (for development)
+
+```bash
+git clone https://github.com/hculap/emodul.git
+cd emodul
+python3 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/emodul --version
+```
+
+On macOS the system Python is PEP-668 externally-managed; `.venv` keeps
+things clean. `pipx` handles this automatically. Activate the venv with
+`source .venv/bin/activate` if you want plain `emodul` on PATH.
 
 ## First-time setup
 
