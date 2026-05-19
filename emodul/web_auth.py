@@ -395,28 +395,42 @@ def _make_handler(state_token: str, base_url: str, language_id: int,
     return Handler
 
 
-def web_login_flow(
+class LoginSession:
+    """Handle to a running login HTTP server. Created by `start_login_server`,
+    consumed by `wait_for_login` (or discarded via `cancel_login`).
+    """
+
+    def __init__(
+        self,
+        server: http.server.ThreadingHTTPServer,
+        state_token: str,
+        done: threading.Event,
+        result: dict[str, Any],
+        url: str,
+    ) -> None:
+        self.server = server
+        self.state_token = state_token
+        self.done = done
+        self.result = result
+        self.url = url
+
+
+def start_login_server(
     base_url: str,
     *,
     language_id: int = 18,
     open_browser: bool = True,
     port: int | None = None,
-    timeout: int = 300,
     on_url: Callable[[str], None] | None = None,
-) -> dict[str, Any]:
-    """Run the browser login flow. Blocks until success / timeout / Ctrl-C.
+) -> LoginSession:
+    """Bind the local login server, open the browser, return a session handle.
 
-    Args:
-        on_url: Optional callback invoked with the login URL *before* blocking.
-                MCP servers use this to send the URL to the AI agent via a
-                progress notification (since the CLI's stderr print doesn't
-                reach the agent). Errors raised inside the callback are
-                swallowed to keep the flow alive.
+    Does NOT wait for the user to submit. Callers must subsequently call
+    `wait_for_login(session, timeout=...)` to block, or `cancel_login(session)`
+    to abandon. Use this when the consumer (e.g. an MCP tool) needs to return
+    the URL without holding the call open.
 
-    Returns a dict with keys: `token`, `user_id`, `email`, `password`.
-    Raises `LoginFlowError` on timeout, cancel, server-bind failure, or
-    missing-token. CLI callers convert this to `SystemExit` themselves;
-    MCP tools let `@safely` translate it into an error envelope.
+    Raises `LoginFlowError` only on server-bind failure (rare).
     """
     state_token = secrets.token_urlsafe(24)
     bind_port = port if port else 0
@@ -438,7 +452,6 @@ def web_login_flow(
     err_console.print()
     err_console.print('[bold]🔥 emodul login — open in your browser:[/bold]')
     err_console.print(f'   [cyan]{url}[/cyan]')
-    err_console.print(f'[dim]Waiting up to {timeout}s. Ctrl-C to cancel.[/dim]')
 
     if on_url is not None:
         try:
@@ -447,27 +460,76 @@ def web_login_flow(
             # Callback failures must not break the auth flow.
             pass
 
-    opened = False
     if open_browser:
         try:
-            opened = webbrowser.open(url)
+            if webbrowser.open(url):
+                err_console.print('[dim](opened in default browser)[/dim]')
         except Exception:
-            opened = False
-    if opened:
-        err_console.print('[dim](opened in default browser)[/dim]')
+            pass
     err_console.print()
 
+    return LoginSession(server, state_token, done, result, url)
+
+
+def wait_for_login(session: LoginSession, *, timeout: int) -> dict[str, Any]:
+    """Block until the user submits the form or `timeout` elapses.
+
+    Always shuts the server down on exit (success, timeout, KeyboardInterrupt).
+    Raises `LoginFlowError` on timeout, cancel, or missing-token.
+    """
     try:
-        if not done.wait(timeout=timeout):
-            server.shutdown()
+        if not session.done.wait(timeout=timeout):
+            session.server.shutdown()
             raise LoginFlowError(
                 f'Login timed out after {timeout}s. Re-run with --timeout N to extend.'
             )
     except KeyboardInterrupt:
-        server.shutdown()
+        session.server.shutdown()
         raise LoginFlowError('Login cancelled.') from None
 
-    server.shutdown()
-    if not result.get('token'):
+    session.server.shutdown()
+    if not session.result.get('token'):
         raise LoginFlowError('Login flow exited without a token (internal error).')
-    return result
+    return session.result
+
+
+def cancel_login(session: LoginSession) -> None:
+    """Stop the server early (e.g. before its timeout). Idempotent."""
+    try:
+        session.server.shutdown()
+    except Exception:
+        pass
+
+
+def web_login_flow(
+    base_url: str,
+    *,
+    language_id: int = 18,
+    open_browser: bool = True,
+    port: int | None = None,
+    timeout: int = 300,
+    on_url: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Blocking wrapper around `start_login_server` + `wait_for_login`.
+
+    Used by the terminal CLI (`emodul auth login --browser`). For MCP /
+    chat-agent contexts where blocking the tool call is harmful, call
+    `start_login_server` directly and run `wait_for_login` in a background
+    thread.
+
+    Returns a dict with keys: `token`, `user_id`, `email`, `password`.
+    Raises `LoginFlowError` on timeout, cancel, server-bind failure, or
+    missing-token. CLI callers convert this to `SystemExit` themselves;
+    MCP tools let `@safely` translate it into an error envelope.
+    """
+    session = start_login_server(
+        base_url,
+        language_id=language_id,
+        open_browser=open_browser,
+        port=port,
+        on_url=on_url,
+    )
+    err_console.print(
+        f'[dim]Waiting up to {timeout}s. Ctrl-C to cancel.[/dim]'
+    )
+    return wait_for_login(session, timeout=timeout)

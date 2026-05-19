@@ -17,6 +17,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import sys
+import threading
 from typing import Any
 
 import anyio
@@ -70,8 +71,11 @@ set_zone_temperature, boost_zone, toggle_zone, attach_schedule, update_setting
 - AUTH: login_browser, set_default_module
 
 WORKFLOW:
-1. whoami → if token_present=false, call login_browser (opens local form, the \
-password never reaches you; returns once user submits or after timeout).
+1. whoami → if token_present=false, call login_browser. It returns the login \
+URL immediately (<1s) — DO NOT pass wait=True in chat clients (Claude Desktop \
+etc.) because the form-submit wait would exceed the ~60s tool-timeout ceiling. \
+Show the URL to the user, wait 10-30s, then poll whoami again until \
+token_present=true. The password never reaches you.
 2. list_modules → discover controllers. Users name them freely (one per floor, \
 per building, anything). NEVER hard-code module names — always discover first.
 3. Optionally set_default_module once, then subsequent calls omit `module`.
@@ -780,30 +784,68 @@ async def update_setting(
 # ---------------------------------------------------------------- AUTH tools
 
 
-@mcp.tool(annotations=ToolAnnotations(openWorldHint=True, idempotentHint=True))
-@safely
-async def login_browser(timeout: int = 300, ctx: Context | None = None) -> dict:
-    """Start an interactive browser login. The agent must show the URL to the user.
-
-    Spins up a local 127.0.0.1 server, attempts to open the user's default
-    browser, and waits for them to submit credentials in the form. The
-    password is sent ONLY to emodul.pl — never reaches the AI agent.
-
-    Args:
-        timeout: Max seconds to wait for the user to complete login. Note
-                 that Claude Desktop's tool ceiling is ~60s; for chat agents
-                 without `resetTimeoutOnProgress` support, run
-                 `emodul auth login --browser` from a host terminal instead.
-
-    Returns: `{ok, email, user_id, url, keychain_ok, warning?}` on success.
-        The `url` is also sent as an MCP log notification while blocking —
-        surface it to the user immediately. `keychain_ok=False` means the
-        token works now but auto-refresh on next expiry will fail; the
-        warning text explains the remediation.
-    """
+def _persist_login_result(result: dict) -> tuple[bool, str | None]:
+    """Save token to config + password to keychain. Returns (keychain_ok, err)."""
     from emodul import auth as auth_kc
     from emodul.config import Config
-    from emodul.web_auth import web_login_flow
+
+    cfg = Config.load()
+    new_cfg = cfg.with_updates(
+        token=result["token"],
+        user_id=result["user_id"],
+        email=result["email"],
+    )
+    new_cfg.save()
+    try:
+        auth_kc.set_password(result["email"], result["password"])
+        return True, None
+    except Exception as exc:  # noqa: BLE001
+        log.warning("keychain set failed: %s", exc)
+        return False, str(exc)
+
+
+@mcp.tool(annotations=ToolAnnotations(openWorldHint=True, idempotentHint=True))
+@safely
+async def login_browser(
+    timeout: int = 300,
+    wait: bool = False,
+    ctx: Context | None = None,
+) -> dict:
+    """Start an interactive browser login. The agent must show the URL to the user.
+
+    Default (wait=False) — RECOMMENDED for chat clients (Claude Desktop,
+    Cursor chat, Continue, Cline, Zed) where tool calls cannot exceed
+    ~60s:
+        1. Binds the local 127.0.0.1 server, opens the user's browser,
+           returns the URL IMMEDIATELY (typically <1s).
+        2. The server keeps running in a background thread for up to
+           `timeout` seconds. When the user submits, the token is saved
+           to `~/.config/emodul/config.json` and (best-effort) the
+           password is stored in the OS keychain.
+        3. The agent should display the returned `url` to the user, wait
+           ~10-30s for them to submit, then poll `whoami` to confirm
+           `token_present` flipped to true.
+
+    wait=True — only for CLI/IDE agents that DO support long-running tools
+    (Claude Code, Codex CLI). Blocks until login completes or `timeout`
+    elapses; returns the full result with `email`/`user_id` inline.
+
+    Args:
+        timeout: Max seconds the local server stays up waiting for submit.
+                 Default 300s (5 min).
+        wait:    See above. Default False (non-blocking).
+
+    Returns:
+        wait=False: `{ok, url, expires_in_seconds, message, instructions}`
+        wait=True:  `{ok, email, user_id, url, keychain_ok, warning?}`
+    """
+    from emodul.config import Config
+    from emodul.web_auth import (
+        cancel_login,
+        start_login_server,
+        wait_for_login,
+        web_login_flow,
+    )
 
     captured_url: list[str] = []
 
@@ -811,11 +853,6 @@ async def login_browser(timeout: int = 300, ctx: Context | None = None) -> dict:
         captured_url.append(url)
         log.info("browser login URL: %s", url)
         if ctx is not None:
-            # Best-effort: send an MCP log message that surfaces the URL in
-            # clients that support log notifications. `send_log_message` is
-            # async and we're on a worker thread, so use `from_thread.run`
-            # (which awaits coroutines). Failures are intentionally swallowed
-            # but logged at debug level so they're not invisible.
             try:
                 anyio.from_thread.run(
                     ctx.session.send_log_message,
@@ -825,46 +862,83 @@ async def login_browser(timeout: int = 300, ctx: Context | None = None) -> dict:
             except Exception as exc:  # noqa: BLE001
                 log.debug("MCP log notification failed (non-fatal): %r", exc)
 
-    def _impl() -> dict:
+    # ─── wait=True: classic blocking flow ─────────────────────────────────
+    if wait:
+        def _impl_blocking() -> dict:
+            cfg = Config.load()
+            result = web_login_flow(
+                base_url=cfg.base_url,
+                language_id=18,
+                open_browser=True,
+                port=None,
+                timeout=timeout,
+                on_url=_on_url,
+            )
+            keychain_ok, keychain_error = _persist_login_result(result)
+            out: dict[str, Any] = dict(
+                email=result["email"],
+                user_id=result["user_id"],
+                url=captured_url[0] if captured_url else None,
+                keychain_ok=keychain_ok,
+            )
+            if not keychain_ok:
+                out["warning"] = (
+                    "Password not stored in OS keychain — login works now but "
+                    f"auto-refresh will fail on next token expiry ({keychain_error}). "
+                    "User will need to re-run login_browser when this happens."
+                )
+            return ok_response(**out)
+
+        return await anyio.to_thread.run_sync(_impl_blocking)
+
+    # ─── wait=False: spawn server, return URL, persist on success in BG ──
+    def _impl_start() -> str:
         cfg = Config.load()
-        result = web_login_flow(
+        session = start_login_server(
             base_url=cfg.base_url,
             language_id=18,
             open_browser=True,
             port=None,
-            timeout=timeout,
             on_url=_on_url,
         )
-        # Persist token first; keychain is best-effort but surfaced.
-        new_cfg = cfg.with_updates(
-            token=result["token"],
-            user_id=result["user_id"],
-            email=result["email"],
-        )
-        new_cfg.save()
-        keychain_ok = True
-        keychain_error: str | None = None
-        try:
-            auth_kc.set_password(result["email"], result["password"])
-        except Exception as exc:  # noqa: BLE001
-            keychain_ok = False
-            keychain_error = str(exc)
-            log.warning("keychain set failed: %s", exc)
-        out: dict[str, Any] = dict(
-            email=result["email"],
-            user_id=result["user_id"],
-            url=captured_url[0] if captured_url else None,
-            keychain_ok=keychain_ok,
-        )
-        if not keychain_ok:
-            out["warning"] = (
-                "Password not stored in OS keychain — login works now but "
-                f"auto-refresh will fail on next token expiry ({keychain_error}). "
-                "User will need to re-run login_browser when this happens."
-            )
-        return ok_response(**out)
 
-    return await anyio.to_thread.run_sync(_impl)
+        def _background_wait() -> None:
+            try:
+                result = wait_for_login(session, timeout=timeout)
+            except Exception as exc:  # noqa: BLE001 - LoginFlowError + anything else
+                log.info("background login finished without success: %s", exc)
+                return
+            try:
+                keychain_ok, _ = _persist_login_result(result)
+                log.info(
+                    "background login succeeded for %s (keychain_ok=%s)",
+                    result["email"], keychain_ok,
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.exception("failed to persist background login: %s", exc)
+                cancel_login(session)
+
+        threading.Thread(
+            target=_background_wait,
+            daemon=True,
+            name="emodul-bg-login-wait",
+        ).start()
+        return session.url
+
+    url = await anyio.to_thread.run_sync(_impl_start)
+    return ok_response(
+        url=url,
+        expires_in_seconds=timeout,
+        message="Open the URL in a browser and submit the form.",
+        instructions=(
+            "Show the `url` field to the user. Wait ~10-30 seconds for them "
+            "to submit credentials, then call `whoami` to check if "
+            "`token_present` is true. If still false, wait and retry (the "
+            f"local server stays up for {timeout}s total). The password "
+            "never reaches you — it's POSTed directly to emodul.pl from "
+            "the user's browser."
+        ),
+    )
 
 
 @mcp.tool()

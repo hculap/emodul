@@ -1,6 +1,6 @@
 [project]
 name = "emodul"
-version = "0.1.5"
+version = "0.1.6"
 description = "Unofficial Python CLI + MCP server for Tech Sterowniki / eModul.pl floor-heating controllers. AI-agent ready."
 readme = "README.md"
 license = { file = "LICENSE" }
