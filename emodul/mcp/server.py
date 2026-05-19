@@ -951,9 +951,17 @@ async def logout(clear_keychain: bool = False) -> dict:
             keychain — auto-refresh on the next 401 will then fail until the
             user runs `login_browser` again. Default False (token gone but
             password retained, so `login_browser` can re-auth without the
-            user typing their password again on next login).
+            user typing their password again).
 
-    Returns: `{ok, email, keychain_cleared, message}`.
+    Returns: `{ok, email, had_token, token_cleared, keychain_cleared,
+        keychain_status, message}`.
+
+    `keychain_status` is one of:
+    - "deleted"       — entry existed and was removed
+    - "not_found"     — clear_keychain requested but no entry under that email
+    - "no_email"      — clear_keychain requested but config has no email to look up
+    - "error"         — delete_password raised
+    - "skipped"       — clear_keychain was False
     """
     from emodul import auth as auth_kc
     from emodul.config import Config
@@ -964,29 +972,58 @@ async def logout(clear_keychain: bool = False) -> dict:
         email = cfg.email
         new_cfg = cfg.with_updates(token=None, user_id=None)
         new_cfg.save()
+
+        keychain_status = "skipped"
         keychain_cleared = False
-        if clear_keychain and email:
-            try:
-                keychain_cleared = auth_kc.delete_password(email)
-            except Exception as exc:  # noqa: BLE001
-                log.warning("keychain delete failed: %s", exc)
-                keychain_cleared = False
-        msg = (
+        if clear_keychain:
+            if not email:
+                keychain_status = "no_email"
+            else:
+                # Check first so we can distinguish "not_found" from "error".
+                existed = auth_kc.get_password(email) is not None
+                if not existed:
+                    keychain_status = "not_found"
+                else:
+                    try:
+                        keychain_cleared = auth_kc.delete_password(email)
+                        keychain_status = "deleted" if keychain_cleared else "error"
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning("keychain delete failed: %s", exc)
+                        keychain_status = "error"
+
+        msg_parts = []
+        msg_parts.append(
             "Token cleared from config.json"
             if had_token
             else "No token was stored; nothing to clear"
         )
         if clear_keychain:
-            msg += (
-                f"; keychain entry for {email!r} deleted"
-                if keychain_cleared
-                else "; keychain entry NOT removed"
-            )
+            kc_messages = {
+                "deleted": f"keychain entry for {email!r} deleted",
+                "not_found": (
+                    f"no keychain entry found for {email!r} "
+                    "(may have been removed earlier)"
+                ),
+                "no_email": (
+                    "cannot remove keychain entry — config has no email; "
+                    "look up manually on macOS with "
+                    "`security find-generic-password -s emodul`"
+                ),
+                "error": (
+                    f"keychain delete for {email!r} failed — check server logs; "
+                    "remove manually on macOS with "
+                    f"`security delete-generic-password -s emodul -a {email!r}`"
+                ),
+            }
+            msg_parts.append(kc_messages.get(keychain_status, "keychain status unknown"))
+
         return ok_response(
             email=email,
-            keychain_cleared=keychain_cleared,
             had_token=had_token,
-            message=msg,
+            token_cleared=had_token,
+            keychain_cleared=keychain_cleared,
+            keychain_status=keychain_status,
+            message="; ".join(msg_parts),
         )
 
     return await anyio.to_thread.run_sync(_impl)
