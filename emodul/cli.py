@@ -17,6 +17,7 @@ from emodul.commands import (
     modules,
     schedules,
     settings,
+    skill,
     stats,
     watch,
     zones,
@@ -142,6 +143,7 @@ misc.register(cli, _wrap_api_errors)
 watch.register(cli, _wrap_api_errors)
 settings.register(cli, _wrap_api_errors)
 schedules.register(cli, _wrap_api_errors)
+skill.register(cli, _wrap_api_errors)
 
 
 if __name__ == "__main__":

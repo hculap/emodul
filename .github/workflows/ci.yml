@@ -34,10 +34,18 @@ jobs:
 
       - name: Verify every subcommand has --help (no import errors)
         run: |
-          for cmd in auth modules zones menu settings schedules stats alarms tiles watch; do
+          for cmd in auth modules zones menu settings schedules stats alarms tiles watch skill; do
             echo "--- $cmd ---"
             emodul "$cmd" --help
           done
+
+      - name: Verify bundled SKILL.md ships in the wheel
+        run: |
+          emodul skill path
+          emodul skill install --to /tmp/test-skill/SKILL.md
+          test -f /tmp/test-skill/SKILL.md
+          head -3 /tmp/test-skill/SKILL.md | grep -q '^name: emodul$'
+          echo "✅ SKILL.md packaged + installable"
 
       - name: Verify Python package imports cleanly
         run: |

@@ -43,6 +43,27 @@ emodul watch install-service           → launchd/systemd background poller →
 
 ---
 
+## One-line setup for AI agents 🤖
+
+Give your AI agent (Claude Code, Codex, Gemini CLI, Cursor) **just this link**:
+
+```
+https://raw.githubusercontent.com/hculap/emodul/main/AGENT.md
+```
+
+…and say "follow this setup prompt". The agent will:
+
+1. `pipx install emodul`
+2. `emodul skill install` — drops the bundled Claude Skill at `~/.claude/skills/emodul/SKILL.md` so future sessions auto-discover the CLI
+3. Ask you for credentials, run `emodul auth login`, select a default module
+4. Verify with `emodul status`
+
+After that, "ustaw Salon na 22" / "podgrzej Łazienkę na 23 na 2h" / "sprawdź ogrzewanie" just work in any Claude Code session in any directory.
+
+See [AGENT.md](AGENT.md) for the full prompt.
+
+---
+
 ## Install
 
 ### From PyPI (recommended)
@@ -51,6 +72,14 @@ emodul watch install-service           → launchd/systemd background poller →
 pipx install emodul         # isolated install, recommended
 # OR
 pip install emodul          # plain pip (use a venv on PEP-668 systems)
+```
+
+After install, to expose the bundled Claude Skill:
+
+```bash
+emodul skill install        # → ~/.claude/skills/emodul/SKILL.md
+# OR
+emodul skill install --symlink   # live-updates on `pipx upgrade emodul`
 ```
 
 Verify:

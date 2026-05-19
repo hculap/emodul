@@ -1,6 +1,6 @@
 [project]
 name = "emodul"
-version = "0.1.0"
+version = "0.1.1"
 description = "Unofficial Python CLI for Tech Sterowniki / eModul.pl floor-heating controllers. AI-agent ready (Claude Skill)."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -48,3 +48,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["emodul"]
+
+# Ship SKILL.md alongside the package so `emodul skill install` can find it
+# after `pip install emodul`. Source remains at repo root for GitHub UI.
+[tool.hatch.build.targets.wheel.force-include]
+"SKILL.md" = "emodul/SKILL.md"
