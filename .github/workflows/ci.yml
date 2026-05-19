@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
 
@@ -34,7 +34,7 @@ jobs:
 
       - name: Verify every subcommand has --help (no import errors)
         run: |
-          for cmd in auth modules zones menu settings schedules stats alarms tiles watch skill; do
+          for cmd in auth modules zones menu settings schedules stats alarms tiles watch skill mcp; do
             echo "--- $cmd ---"
             emodul "$cmd" --help
           done
@@ -46,6 +46,36 @@ jobs:
           test -f /tmp/test-skill/SKILL.md
           head -3 /tmp/test-skill/SKILL.md | grep -q '^name: emodul$'
           echo "✅ SKILL.md packaged + installable"
+
+      - name: MCP server smoke test (real client over stdio)
+        run: |
+          python3 <<'PY'
+          import asyncio
+          import sys
+          from mcp.client.session import ClientSession
+          from mcp.client.stdio import StdioServerParameters, stdio_client
+
+          async def main() -> int:
+              params = StdioServerParameters(command="emodul", args=["mcp"])
+              async with stdio_client(params) as (read, write):
+                  async with ClientSession(read, write) as session:
+                      await asyncio.wait_for(session.initialize(), timeout=15)
+                      result = await asyncio.wait_for(session.list_tools(), timeout=10)
+                      tools = result.tools
+                      print(f"MCP server exposes {len(tools)} tools:")
+                      for t in tools:
+                          print(f"  - {t.name}")
+                      assert len(tools) >= 10, f"expected at least 10 tools, got {len(tools)}"
+                      return 0
+
+          sys.exit(asyncio.run(main()))
+          PY
+
+      - name: Verify emodul-mcp standalone entry point resolves
+        run: |
+          which emodul-mcp
+          # The script itself launches the server; just verify the module imports.
+          python -c "from emodul.mcp.server import main, mcp; assert callable(main)"
 
       - name: Verify Python package imports cleanly
         run: |

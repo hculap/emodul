@@ -23,11 +23,21 @@ import json
 import secrets
 import threading
 import webbrowser
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from emodul.api import ApiClient, EmodulApiError
 from emodul.format import err_console
+
+
+class LoginFlowError(Exception):
+    """Raised when the browser login flow cannot complete.
+
+    Causes: local port bind failure, user-cancel (Ctrl-C), timeout, or
+    the server returning a malformed auth response. Subclasses Exception
+    (not BaseException) so it propagates cleanly through `@safely` in
+    MCP tools — earlier we raised SystemExit which killed the server.
+    """
 
 # Single-file HTML/CSS/JS. Apple-system aesthetic, system dark mode aware.
 _HTML_FORM = """<!DOCTYPE html>
@@ -392,11 +402,21 @@ def web_login_flow(
     open_browser: bool = True,
     port: int | None = None,
     timeout: int = 300,
+    on_url: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Run the browser login flow. Blocks until success / timeout / Ctrl-C.
 
+    Args:
+        on_url: Optional callback invoked with the login URL *before* blocking.
+                MCP servers use this to send the URL to the AI agent via a
+                progress notification (since the CLI's stderr print doesn't
+                reach the agent). Errors raised inside the callback are
+                swallowed to keep the flow alive.
+
     Returns a dict with keys: `token`, `user_id`, `email`, `password`.
-    Raises SystemExit on timeout, cancel, or server-bind failure.
+    Raises `LoginFlowError` on timeout, cancel, server-bind failure, or
+    missing-token. CLI callers convert this to `SystemExit` themselves;
+    MCP tools let `@safely` translate it into an error envelope.
     """
     state_token = secrets.token_urlsafe(24)
     bind_port = port if port else 0
@@ -407,7 +427,7 @@ def web_login_flow(
     try:
         server = http.server.ThreadingHTTPServer(('127.0.0.1', bind_port), handler_class)
     except OSError as exc:
-        raise SystemExit(f'Cannot bind 127.0.0.1:{bind_port}: {exc}') from exc
+        raise LoginFlowError(f'Cannot bind 127.0.0.1:{bind_port}: {exc}') from exc
 
     actual_port = server.server_address[1]
     url = f'http://127.0.0.1:{actual_port}/?state={state_token}'
@@ -419,6 +439,13 @@ def web_login_flow(
     err_console.print('[bold]🔥 emodul login — open in your browser:[/bold]')
     err_console.print(f'   [cyan]{url}[/cyan]')
     err_console.print(f'[dim]Waiting up to {timeout}s. Ctrl-C to cancel.[/dim]')
+
+    if on_url is not None:
+        try:
+            on_url(url)
+        except Exception:
+            # Callback failures must not break the auth flow.
+            pass
 
     opened = False
     if open_browser:
@@ -433,14 +460,14 @@ def web_login_flow(
     try:
         if not done.wait(timeout=timeout):
             server.shutdown()
-            raise SystemExit(
+            raise LoginFlowError(
                 f'Login timed out after {timeout}s. Re-run with --timeout N to extend.'
             )
     except KeyboardInterrupt:
         server.shutdown()
-        raise SystemExit('\nLogin cancelled.') from None
+        raise LoginFlowError('Login cancelled.') from None
 
     server.shutdown()
     if not result.get('token'):
-        raise SystemExit('Login flow exited without a token (internal error).')
+        raise LoginFlowError('Login flow exited without a token (internal error).')
     return result

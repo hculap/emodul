@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/hculap/emodul/actions/workflows/ci.yml/badge.svg)](https://github.com/hculap/emodul/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Claude Skill](https://img.shields.io/badge/Claude-Skill%20ready-D97757.svg)](SKILL.md)
 [![GitHub stars](https://img.shields.io/github/stars/hculap/emodul?style=social)](https://github.com/hculap/emodul/stargazers)
 
@@ -43,24 +43,48 @@ emodul watch install-service           → launchd/systemd background poller →
 
 ---
 
-## One-line setup for AI agents 🤖
+## Three ways to use this 🤖
 
-Give your AI agent (Claude Code, Codex, Gemini CLI, Cursor) **just this link**:
+| Path | For which agents | What it gives you |
+|---|---|---|
+| **A: MCP server** | Claude Desktop / Cursor chat / Continue / Cline / Zed / JetBrains AI / OpenCode / Gemini CLI | One `pipx install emodul` + a JSON entry in the client config. Chat clients call `get_status`, `set_zone_temperature`, etc. as native tools. |
+| **B: AGENT.md prompt** | Claude Code / Codex CLI / Cursor agent / Aider | Paste a single URL; the CLI agent runs `pipx install emodul && emodul skill install && emodul auth login --browser`. SKILL.md gets discovered automatically. |
+| **C: Copy-paste fallback** | claude.ai web / ChatGPT web / Cowork (sandboxed) | Sandboxed agent prints the commands; user runs them in their own terminal. |
+
+See [AGENT.md](AGENT.md) for full per-runtime configs.
+
+### Path A in 30 seconds — Claude Desktop
+
+```bash
+pipx install emodul
+emodul auth login --browser       # one-time login
+emodul skill install              # so Claude Code (Path B) shares the same skill
+```
+
+Then in `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "emodul": {
+      "command": "emodul",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop → ask *"what's the temperature in Salon?"* and Claude calls the MCP tool natively.
+
+### Path B in 30 seconds — Claude Code (or any CLI agent)
+
+Paste this URL into your agent:
 
 ```
 https://raw.githubusercontent.com/hculap/emodul/main/AGENT.md
 ```
 
-…and say "follow this setup prompt". The agent will:
-
-1. `pipx install emodul`
-2. `emodul skill install` — drops the bundled Claude Skill at `~/.claude/skills/emodul/SKILL.md` so future sessions auto-discover the CLI
-3. Ask you for credentials, run `emodul auth login`, select a default module
-4. Verify with `emodul status`
-
-After that, "ustaw Salon na 22" / "podgrzej Łazienkę na 23 na 2h" / "sprawdź ogrzewanie" just work in any Claude Code session in any directory.
-
-See [AGENT.md](AGENT.md) for the full prompt.
+The agent handles everything: install, skill registration, browser auth, default-module selection.
 
 ---
 
@@ -145,7 +169,7 @@ Pick a default controller so `-m` becomes optional:
 
 ```bash
 emodul modules list
-emodul modules select Parter           # name substring works
+emodul modules select <module-name>    # name substring works (use a value from `modules list`)
 ```
 
 Cache the Polish translation dictionary (16,368 entries — used to resolve
@@ -345,7 +369,7 @@ The CLI is designed to be a clean tool surface for an LLM agent. Conventions:
 1. **`--json` on every command** for stable structured output. Default text
    output is human-friendly (rich tables, colors) but `--json` is canonical.
 2. **Module selector `-m`** accepts a full 32-char udid, a unique prefix
-   (e.g. `abc12345`), or a unique name substring (e.g. `Parter`).
+   (e.g. `abc12345`), or a unique name substring of whatever the user named their controller.
 3. **Slug-based settings** (`emodul settings list` enumerates all 25)
    instead of raw IDOs. The agent never has to know that
    "emergency-mode" lives at `MI:3145755:percent`.

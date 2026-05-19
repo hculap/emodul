@@ -29,17 +29,10 @@ def _zone_row(snapshot: dict, zone_id: int) -> dict | None:
 
 
 def _resolve_zone(snapshot: dict, query: str) -> dict | None:
-    rows = flatten_zones(snapshot)
-    if query.isdigit():
-        zid = int(query)
-        for row in rows:
-            if row.get("zone_id") == zid:
-                return row
-    q = query.lower()
-    matches = [r for r in rows if q in (r.get("name") or "").lower()]
-    if len(matches) == 1:
-        return matches[0]
-    return None
+    """Backwards-compatible wrapper; logic lives in _zone_resolver."""
+    from emodul._zone_resolver import resolve_zone
+
+    return resolve_zone(flatten_zones(snapshot), query)
 
 
 def register(cli: click.Group, wrap) -> None:
