@@ -5,6 +5,22 @@ All notable changes to `emodul` are documented here. Format loosely follows
 [PyPI releases](https://pypi.org/project/emodul/#history) and
 [GitHub Releases](https://github.com/hculap/emodul/releases).
 
+## [0.1.10] — 2026-05-21
+
+### Changed
+- `get_temperature_history` (MCP tool) now bucket-averages each zone's series
+  to at most 600 samples so multi-day fetches across all zones fit under
+  Claude Desktop's ~1 MB / 25k-token tool-result cap. A 7-day fetch across
+  8 zones drops from ~2.6 MB raw to ~150 KB after bucketing — enough
+  resolution for a chart, comfortably under every known client cap.
+- Response gains a `downsample` envelope (`{downsampled, max_points_per_zone,
+  per_zone: {<key>: {original, returned}}}`) so the agent can report the
+  pre-bucket sample count to the user. The `{x, y}` shape and series keys
+  are unchanged.
+- CLI `emodul stats linear` is unaffected — downsampling lives only in the
+  MCP tool. The Python SDK's FastMCP has no server-side response cap to
+  configure; the 1 MB ceiling lives in Anthropic clients.
+
 ## [0.1.9] — 2026-05-19
 
 ### Changed
