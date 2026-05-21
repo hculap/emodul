@@ -106,6 +106,9 @@ diagnose hardware faults from temperature data alone in off-season; ask the \
 user.
 - Long get_temperature_history calls risk the client's ~60s tool timeout — \
 narrow the date range and chunk if needed.
+- get_temperature_history bucket-averages each zone to at most 600 points to \
+stay under Claude Desktop's ~1 MB tool-result cap. Pre-bucket sample counts \
+live in `downsample.per_zone[key].original`.
 """,
 )
 
@@ -443,6 +446,63 @@ async def get_alarms(
     return await anyio.to_thread.run_sync(_impl)
 
 
+# Per-zone sample budget for `get_temperature_history`. Picked so a multi-month
+# fetch across ~8 zones fits under Claude Desktop's ~1 MB / 25k-token tool-result
+# cap while keeping enough resolution for a useful chart (10-min buckets over a
+# week, ~30-min over a month). Raise via `FASTMCP_*` env vars if you need more.
+_HISTORY_MAX_POINTS_PER_ZONE = 600
+
+
+def _downsample_series(
+    points: list[dict], max_points: int = _HISTORY_MAX_POINTS_PER_ZONE
+) -> list[dict]:
+    """Bucket-average a `[{x, y}, ...]` series down to <= `max_points`."""
+    n = len(points)
+    if n <= max_points or max_points <= 0:
+        return points
+    bucket_size = (n + max_points - 1) // max_points  # ceil
+    out: list[dict] = []
+    for start in range(0, n, bucket_size):
+        chunk = points[start:start + bucket_size]
+        ys = [p["y"] for p in chunk if isinstance(p.get("y"), (int, float))]
+        if not ys:
+            continue
+        # Take the bucket's first timestamp as the bucket label — keeps the
+        # series strictly monotonic and avoids inventing new x values.
+        out.append({"x": chunk[0].get("x"), "y": round(sum(ys) / len(ys), 2)})
+    return out
+
+
+def _maybe_downsample_history(payload: dict, max_points: int) -> tuple[dict, dict]:
+    """Apply `_downsample_series` to every series under `data.history`.
+
+    Returns `(new_payload, meta)` where `meta` reports per-zone sample counts.
+    """
+    data = payload.get("data") or {}
+    history = data.get("history") or {}
+    new_history: dict[str, list[dict]] = {}
+    stats: dict[str, dict[str, int]] = {}
+    downsampled_any = False
+    for key, series in history.items():
+        if not isinstance(series, list):
+            new_history[key] = series
+            continue
+        original = len(series)
+        bucketed = _downsample_series(series, max_points)
+        new_history[key] = bucketed
+        if len(bucketed) != original:
+            downsampled_any = True
+        stats[key] = {"original": original, "returned": len(bucketed)}
+    new_data = {**data, "history": new_history}
+    new_payload = {**payload, "data": new_data}
+    meta = {
+        "downsampled": downsampled_any,
+        "max_points_per_zone": max_points,
+        "per_zone": stats,
+    }
+    return new_payload, meta
+
+
 @mcp.tool()
 @safely
 async def get_temperature_history(
@@ -451,7 +511,7 @@ async def get_temperature_history(
     year: int | None = None,
     module: str | None = None,
 ) -> dict:
-    """Per-zone temperature time-series.
+    """Per-zone temperature time-series (auto-downsampled to stay under client caps).
 
     Args:
         period: `day` (last ~24h, ~1 sample/min, ~1200 points/zone) or `week`
@@ -460,10 +520,14 @@ async def get_temperature_history(
         year: 4-digit year (with `month`).
         module: Optional module override.
 
-    Returns: `{ok, period, status, data: {history: {<key>: [{x, y}, ...]}}}`
-    where `<key>` is an opaque TECH identifier ending with the zone name
-    (split on `|` and take the last segment to get the readable name);
-    `x` is a `YYYYMMDDhhmm` timestamp string and `y` is °C.
+    Returns: `{ok, period, status, data: {history: {<key>: [{x, y}, ...]}},
+    downsample: {downsampled, max_points_per_zone, per_zone}}` — `<key>` is an
+    opaque TECH identifier ending with the zone name (split on `|` and take the
+    last segment to get the readable name); `x` is a `YYYYMMDDhhmm` timestamp
+    string and `y` is °C. Each zone is bucket-averaged to at most
+    `max_points_per_zone` samples (default 600) so multi-day fetches across all
+    zones fit under Claude Desktop's ~1 MB / 25k-token tool-result cap. Inspect
+    `downsample.per_zone[key].original` for the pre-bucket sample count.
 
     For multi-month ranges, prefer the CLI `emodul stats dump --since 6m` —
     running long stats fetches from an MCP tool may exceed Claude Desktop's
@@ -474,7 +538,10 @@ async def get_temperature_history(
         with open_api() as (api, cfg):
             udid = resolve_udid(module, api, cfg)
             data = api.stats_linear(udid, period=period, month=month, year=year)
-        return ok_response(period=period, **data)
+        bucketed, meta = _maybe_downsample_history(
+            data, _HISTORY_MAX_POINTS_PER_ZONE
+        )
+        return ok_response(period=period, downsample=meta, **bucketed)
 
     return await anyio.to_thread.run_sync(_impl)
 
