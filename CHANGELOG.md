@@ -5,6 +5,13 @@ All notable changes to `emodul` are documented here. Format loosely follows
 [PyPI releases](https://pypi.org/project/emodul/#history) and
 [GitHub Releases](https://github.com/hculap/emodul/releases).
 
+## [0.1.11] — Unreleased
+
+### Fixed
+- A fresh install pulled `mcp` 2.x, which removed `mcp.server.fastmcp`, so
+  `emodul mcp` failed on start with `ModuleNotFoundError`. The dependency is now
+  `mcp[cli]>=1.20,<2`. Porting to the 2.x `MCPServer` API is a separate change.
+
 ## [0.1.10] — 2026-05-21
 
 ### Changed
@@ -157,6 +164,8 @@ Initial release. CLI with 12 subcommand groups (`auth`, `modules`,
 named-slug parameter control, Polish menu decoding via i18n cache,
 SQLite-backed background watcher with launchd/systemd installer.
 
+[0.1.11]: https://github.com/hculap/emodul/compare/v0.1.10...v0.1.11
+[0.1.10]: https://github.com/hculap/emodul/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/hculap/emodul/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/hculap/emodul/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/hculap/emodul/compare/v0.1.6...v0.1.7
