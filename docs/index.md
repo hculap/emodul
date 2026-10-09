@@ -114,3 +114,5 @@ Python 3.10 / 3.11 / 3.12 / 3.13 · macOS · Linux · Windows (community-tested)
 Beta. Działa na produkcji autora od kwietnia 2026 (2 sterowniki, 8 stref). API eModul.pl jest niepublikowane i może się zmienić bez zapowiedzi — w razie awarii zgłoś [issue](https://github.com/hculap/emodul/issues).
 
 [CHANGELOG](https://github.com/hculap/emodul/blob/main/CHANGELOG.md) · [Discussions](https://github.com/hculap/emodul/discussions) · [Issues](https://github.com/hculap/emodul/issues)
+
+Autor: [Szymon Paluch](https://szymonpaluch.com).
