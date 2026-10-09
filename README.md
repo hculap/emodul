@@ -519,3 +519,11 @@ Tech Sterowniki publishes no official SDK or schema for eModul itself,
 though their [`techsterowniki/sinum-mcp`](https://github.com/techsterowniki/sinum-mcp) repo bundles OpenAPI schemas for their
 sibling Sinum product, which confirm wire conventions (×10 temp, unit
 codes 0-6) used across their codebase.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Trademarks and the no-affiliation statement are in [NOTICE](NOTICE).
+
+## Author
+
+Made by [Szymon Paluch](https://szymonpaluch.com), who builds AI systems that run in production.
