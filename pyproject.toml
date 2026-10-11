@@ -58,3 +58,9 @@ packages = ["emodul"]
 [tool.hatch.build.targets.wheel.force-include]
 "SKILL.md" = "emodul/SKILL.md"
 "SKILL_MCP.md" = "emodul/SKILL_MCP.md"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

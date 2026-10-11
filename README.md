@@ -228,17 +228,22 @@ OLD value for ~30s — Home Assistant integration issue #184). Disable with
 
 ### Settings (named parameters, no raw IDOs)
 
-Twenty-five named slugs across MU/MI/MS (no MP — that PIN is unknown).
+Twenty-six named slugs across MU/MI/MS (no MP — that PIN is unknown). Most are
+**per zone** ("Strefa N" in the installer menu) — `show`/`get`/`audit` report every
+zone, and `set` needs `--zone <name|number>` or `--all-zones`. `settings list`
+shows each slug's `scope`.
 
 ```bash
 emodul settings list                             # inventory: name / label / category
-emodul settings show                             # dashboard table with audit verdicts
+emodul settings show                             # dashboard table, one row per zone, with audit verdicts
+emodul settings show --zone Łazienka             # single zone (name or Strefa number)
 emodul settings show --category safety           # filter
 emodul settings show --include-locked            # show items the server reports as access=false
-emodul settings get emergency-mode
-emodul settings set emergency-mode 30
-emodul settings set diagnostic-file off --all-modules    # apply to every controller
-emodul settings audit                            # bad/warn items + cross-module drift detection
+emodul settings get emergency-mode               # every zone's value
+emodul settings set emergency-mode 30 --all-zones
+emodul settings set hysteresis 0.4 --zone Biuro
+emodul settings set diagnostic-file off --all-modules    # module-wide setting, every controller
+emodul settings audit                            # bad/warn per zone + drift between zones/controllers
 ```
 
 Slug categories: **safety** (emergency-mode, antifreeze, actuator-protection,
@@ -385,7 +390,7 @@ The CLI is designed to be a clean tool surface for an LLM agent. Conventions:
    output is human-friendly (rich tables, colors) but `--json` is canonical.
 2. **Module selector `-m`** accepts a full 32-char udid, a unique prefix
    (e.g. `abc12345`), or a unique name substring of whatever the user named their controller.
-3. **Slug-based settings** (`emodul settings list` enumerates all 25)
+3. **Slug-based settings** (`emodul settings list` enumerates all 26)
    instead of raw IDOs. The agent never has to know that
    "emergency-mode" lives at `MI:3145755:percent`.
 4. **`--all-modules`** for cross-controller fan-out where it makes sense
@@ -414,7 +419,7 @@ emodul/
   config.py                 ~/.config/emodul/config.json (chmod 600)
   format.py                 °C ↔ tenths conversion, table rendering, JSON output
   i18n.py                   16K-entry PL dictionary cache
-  settings_map.py           25 named parameters → (menu_type, ido, kind, recommend, bad)
+  settings_map.py           26 named parameters → (menu_type, ido, kind, recommend, bad)
   storage.py                SQLite schema for the watcher
   cli.py                    click root group, Ctx with module-name resolver
   commands/

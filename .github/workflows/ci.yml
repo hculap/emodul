@@ -77,6 +77,11 @@ jobs:
           # The script itself launches the server; just verify the module imports.
           python -c "from emodul.mcp.server import main, mcp; assert callable(main)"
 
+      - name: Unit tests
+        run: |
+          pip install pytest
+          pytest -q
+
       - name: Verify Python package imports cleanly
         run: |
           python -c "import emodul; from emodul import api, auth, config, format, i18n, settings_map, storage; print('all modules import ok')"
