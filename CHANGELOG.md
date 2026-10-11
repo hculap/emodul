@@ -5,7 +5,41 @@ All notable changes to `emodul` are documented here. Format loosely follows
 [PyPI releases](https://pypi.org/project/emodul/#history) and
 [GitHub Releases](https://github.com/hculap/emodul/releases).
 
-## [0.1.11] — Unreleased
+## [0.1.12] — 2026-10-11
+
+### Fixed
+- `settings show/get/set/audit` (and MCP `audit_settings` / `update_setting`)
+  only touched the Strefa 1 IDO of zone-scoped parameters. Zones 2+ were
+  never read or written, so `settings audit` reported a clean config while
+  other zones still had e.g. `Tryb awaryjny = 1 %`. Zone-scoped settings now
+  resolve to each zone's IDO (Strefa 1 IDO + stride·(N−1)), and every zone is
+  read, audited, and written.
+- Writes no longer report a stale value as settled: `wait` now polls until
+  `duringChange` is clear **and** the menu reads back the written value
+  (`verified` per target). The server can clear the flag a poll before the
+  new value shows up.
+- `relay-delay` is decoded in seconds (MS 1056 is `format=2`, 0–30 s), not °C.
+- The MCP server no longer logs every HTTP request at INFO. Those lines carried
+  the full URL — user id, controller udid and the service-menu PIN
+  (`/menu/MS/0:<pin>`) — into the MCP client's log files. `httpx`/`httpcore`
+  loggers now sit at WARNING.
+
+### Changed
+- **Breaking (CLI/MCP):** `settings set` / `update_setting` on a zone-scoped
+  slug requires `--zone <name|number>` or `--all-zones` (`zone` /
+  `all_zones` in MCP); module-wide slugs reject them. Previously a bare
+  `settings set emergency-mode 30` silently wrote Strefa 1 only.
+- `settings get` on a zone-scoped slug returns `{scope: "zone", zones: [...]}`;
+  `settings show` / `audit` rows carry `zone` + `zone_no`; drift compares
+  zones within and across controllers (`per_zone`), skipping setpoints and
+  presets that legitimately differ. `settings list` adds `scope`.
+- `settings set` exits non-zero when any target fails or cannot be verified.
+
+### Added
+- `pump-antistop` setting (MI 1045, module-wide; recommended ON).
+- Test suite (`tests/`, pytest).
+
+## [0.1.11] — 2026-10-09
 
 ### Fixed
 - A fresh install pulled `mcp` 2.x, which removed `mcp.server.fastmcp`, so
