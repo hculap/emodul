@@ -42,6 +42,11 @@ logging.basicConfig(
     stream=sys.stderr,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+# httpx/httpcore log every request URL at INFO. eModul URLs embed the user id,
+# controller udid and menu PINs (`/menu/MS/0:<pin>`), and MCP clients persist
+# stderr to log files — keep those loggers at WARNING.
+for _noisy in ("httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 log = logging.getLogger("emodul.mcp")
 
 mcp = FastMCP(
