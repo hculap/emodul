@@ -154,7 +154,7 @@ manually and inspect the JSON returned.
 | `get_zone` | detail for a single zone by name | read |
 | `list_modules` | controllers on the account | read |
 | `list_schedules` | all 5 globalSchedule slots, decoded | read |
-| `audit_settings` | 25-parameter audit + drift detection | read |
+| `audit_settings` | 26-parameter audit, every zone + drift detection | read |
 | `get_alarms` | alarm history for a date range | read |
 | `get_temperature_history` | per-zone temp time series | read |
 | `set_zone_temperature` | change a zone setpoint | **write** |

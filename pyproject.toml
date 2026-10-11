@@ -1,6 +1,6 @@
 [project]
 name = "emodul"
-version = "0.1.11"
+version = "0.1.12"
 description = "Unofficial Python CLI + MCP server for Tech Sterowniki / eModul.pl floor-heating controllers. AI-agent ready."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -58,3 +58,9 @@ packages = ["emodul"]
 [tool.hatch.build.targets.wheel.force-include]
 "SKILL.md" = "emodul/SKILL.md"
 "SKILL_MCP.md" = "emodul/SKILL_MCP.md"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

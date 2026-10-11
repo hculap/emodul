@@ -474,6 +474,23 @@ class ApiClient:
             return True
         return not _is_changing(item.get("duringChange"))
 
+    def is_menu_item_at(
+        self, udid: str, menu_type: str, ido: int, wanted: Any, *, pin_chain=None
+    ) -> bool:
+        """True when the element is settled AND reports `wanted`.
+
+        `duringChange` alone is not enough: the server can clear the flag a
+        poll or two before the new value shows up, so a settle-only check
+        re-reads the old value and reports a false mismatch.
+        """
+        from emodul.settings_map import find_item, find_value  # avoid cycle
+
+        menu = self.get_menu(udid, menu_type, pin_chain=pin_chain)
+        item = find_item(menu, ido)
+        if item is None or _is_changing(item.get("duringChange")):
+            return False
+        return find_value(menu, ido) == wanted
+
     def is_zone_settled(self, udid: str, zone_id: int) -> bool:
         """True when zone/mode/description all report `duringChange` clear."""
         snap = self.get_module(udid)

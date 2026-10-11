@@ -34,13 +34,7 @@ from emodul.mcp._helpers import (
     resolve_udid,
     safely,
 )
-from emodul.settings_map import (
-    SETTINGS,
-    SETTINGS_BY_NAME,
-    find_item,
-    find_value,
-    is_accessible,
-)
+from emodul.settings_map import SETTINGS, SETTINGS_BY_NAME
 
 # Logging to stderr — stdio MCP transport reserves stdout for JSON-RPC.
 logging.basicConfig(
@@ -48,6 +42,11 @@ logging.basicConfig(
     stream=sys.stderr,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+# httpx/httpcore log every request URL at INFO. eModul URLs embed the user id,
+# controller udid and menu PINs (`/menu/MS/0:<pin>`), and MCP clients persist
+# stderr to log files — keep those loggers at WARNING.
+for _noisy in ("httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 log = logging.getLogger("emodul.mcp")
 
 mcp = FastMCP(
@@ -326,12 +325,13 @@ async def list_schedules(module: str | None = None) -> dict:
 @mcp.tool()
 @safely
 async def audit_settings() -> dict:
-    """Audit configuration of every controller; flag bad/non-default values.
+    """Audit configuration of every controller and every zone; flag bad values.
 
-    Walks all 25 known settings (emergency-mode, hysteresis, sigma-range,
-    antifreeze, etc.) on each module. Returns per-module findings + a
-    `drift` section showing parameters that differ between controllers
-    (typically a sign of accidental config divergence).
+    Walks all known settings (emergency-mode, hysteresis, sigma-range,
+    antifreeze, pump-antistop, etc.). Zone-scoped settings are read for each
+    zone ("Strefa N") — issues carry `zone` / `zone_no`. The `drift` section
+    lists parameters that should be uniform but differ between zones
+    (`per_zone`) or controllers (`per_module`).
 
     Read-only. Always safe to call.
 
@@ -339,76 +339,39 @@ async def audit_settings() -> dict:
     """
 
     def _impl() -> dict:
-        from emodul.commands.menu import _pin_chain
+        from emodul import _settings_ops as ops
 
         with open_api() as (api, cfg):
-            mods = api.list_modules()
-            targets = [
-                (m["udid"], m.get("name") or m["udid"][:8])
-                for m in mods
-                if m.get("udid")
-            ]
             report: dict[str, dict] = {}
-            all_known: dict[str, dict] = {}
-            menus_by_module: dict[str, dict] = {}
-            needed = sorted({s.menu_type for s in SETTINGS})
-            menu_errors_by_module: dict[str, dict[str, str]] = {}
-            for udid, label in targets:
-                menus: dict = {}
-                menu_errors: dict[str, str] = {}
-                for mt in needed:
-                    chain = _pin_chain(cfg, udid, mt) or None
-                    try:
-                        menus[mt] = api.get_menu(udid, mt, pin_chain=chain)
-                    except EmodulApiError as exc:
-                        # Record but continue — partial audits are still useful.
-                        # Surface the failure so the user knows the report
-                        # is incomplete (e.g. MS PIN missing → 403).
-                        menus[mt] = {}
-                        menu_errors[mt] = f"HTTP {exc.status}"
-                menus_by_module[udid] = menus
-                menu_errors_by_module[udid] = menu_errors
-                findings = []
-                for s in SETTINGS:
-                    item = find_item(menus.get(s.menu_type, {}), s.ido)
-                    if not is_accessible(item) and item is not None:
-                        continue
-                    wire = find_value(menus.get(s.menu_type, {}), s.ido)
-                    if wire is not None:
-                        all_known.setdefault(s.name, {})[label] = wire
-                    severity, note = s.audit(wire)
-                    if severity in ("bad", "warn"):
-                        findings.append(
-                            {
-                                "name": s.name,
-                                "label": s.pl_label,
-                                "current": s.decode(wire),
-                                "severity": severity,
-                                "note": note,
-                            }
-                        )
+            rows_by_module: dict[str, list[dict]] = {}
+            for m in api.list_modules():
+                if not m.get("udid"):
+                    continue
+                label = m.get("name") or m["udid"][:8]
+                _, rows, errors = ops.read_module(api, cfg, m["udid"], SETTINGS)
+                rows_by_module[label] = rows
+                issues = [
+                    {
+                        "name": r["name"],
+                        "label": r["label"],
+                        "zone": r["zone"],
+                        "zone_no": r["zone_no"],
+                        "current": r["display"],
+                        "severity": r["severity"],
+                        "note": r["audit_note"],
+                    }
+                    for r in ops.findings(rows)
+                ]
                 report[label] = {
-                    "udid": udid,
-                    "issues": findings,
+                    "udid": m["udid"],
+                    "issues": issues,
                     "counts": {
-                        "bad": sum(1 for f in findings if f["severity"] == "bad"),
-                        "warn": sum(1 for f in findings if f["severity"] == "warn"),
+                        "bad": sum(1 for f in issues if f["severity"] == "bad"),
+                        "warn": sum(1 for f in issues if f["severity"] == "warn"),
                     },
-                    "menu_errors": menu_errors_by_module.get(udid) or {},
+                    "menu_errors": errors,
                 }
-        drift = []
-        if len(targets) > 1:
-            for name, by_mod in all_known.items():
-                if len(set(by_mod.values())) > 1:
-                    s = SETTINGS_BY_NAME[name]
-                    drift.append(
-                        {
-                            "name": name,
-                            "label": s.pl_label,
-                            "per_module": {m: s.decode(v) for m, v in by_mod.items()},
-                        }
-                    )
-        return ok_response(per_module=report, drift=drift)
+        return ok_response(per_module=report, drift=ops.drift(rows_by_module, SETTINGS))
 
     return await anyio.to_thread.run_sync(_impl)
 
@@ -766,68 +729,77 @@ async def attach_schedule(
 async def update_setting(
     name: str,
     value: str,
+    zone: str | None = None,
+    all_zones: bool = False,
     all_modules: bool = False,
     module: str | None = None,
     wait: bool = True,
-    timeout: float = 30.0,
+    timeout: float = 60.0,
 ) -> dict:
     """Update a named controller parameter (e.g. emergency-mode, hysteresis).
 
+    Most parameters are set PER ZONE ("Strefa N"): emergency-mode, hysteresis,
+    sigma-range, actuator-*, weather-control, heating, cooling, presets,
+    optimum-*, sensor-calibration. For those pass `zone` (name or Strefa
+    number) or `all_zones=True` — otherwise the call is rejected. Module-wide
+    parameters (antifreeze, pump-antistop, relay-delay, temp-max, temp-min,
+    diagnostic-file, show-all) take neither.
+
     Args:
-        name: Slug from `settings list` — one of: emergency-mode, hysteresis,
-              sigma-range, antifreeze, weather-control, cooling, heating,
-              optimum-start, sensor-calibration, diagnostic-file, show-all,
-              temp-max, temp-min, preset-comfort, preset-eco, preset-holiday, etc.
+        name: Slug from `settings list`.
         value: Display value (°C as float, % as int, "on"/"off" for bool).
+        zone: Target zone for zone-scoped settings.
+        all_zones: Write every zone of each target module.
         all_modules: Apply to every controller on the account.
         module: Single module when `all_modules=False`.
+        wait: Block until each write reads back the new value.
 
-    Returns: `{ok, name, label, wire_value, display, applied_to: [...]}`.
+    Returns: `{ok, name, label, wire_value, display, applied_to: [...]}`;
+    each `applied_to` row has `zone`, `ok`, and `verified` (value read back).
     """
-    from emodul.commands.menu import _pin_chain
+    from emodul import _settings_ops as ops
+    from emodul._zone_settings import expand, select_zones, zones_from_module
 
     def _impl() -> dict:
         s = SETTINGS_BY_NAME.get(name)
         if not s:
             known = ", ".join(sorted(SETTINGS_BY_NAME))
             raise ValueError(f"Unknown setting {name!r}. Known: {known}")
+        if s.zone_scoped and not (zone or all_zones):
+            raise ValueError(f"{s.name} is set per zone; pass `zone` or `all_zones=True`.")
+        if s.zone_scoped and zone and all_zones:
+            raise ValueError("Pass either `zone` or `all_zones`, not both.")
+        if not s.zone_scoped and (zone or all_zones):
+            raise ValueError(f"{s.name} is module-wide; drop `zone` / `all_zones`.")
         wire = s.encode(value)
+        results: list[dict] = []
         with open_api() as (api, cfg):
             if all_modules:
-                targets = [m["udid"] for m in api.list_modules() if m.get("udid")]
+                udids = [m["udid"] for m in api.list_modules() if m.get("udid")]
             else:
-                targets = [resolve_udid(module, api, cfg)]
-            results = []
-            for udid in targets:
-                # Narrow exception scope to known API/network failures so that
-                # genuine bugs (KeyError, AttributeError) propagate to `safely`
-                # and get a full traceback rather than silent per-target masking.
+                udids = [resolve_udid(module, api, cfg)]
+            for udid in udids:
+                zones = zones_from_module(api.get_module(udid))
                 try:
-                    resp = api.set_menu_param(udid, s.menu_type, s.ido, {"value": wire})
-                    settled = True
-                    if wait:
-                        pin_chain = _pin_chain(cfg, udid, s.menu_type) or None
-                        settled = api.wait_until_settled(
-                            lambda u=udid, pc=pin_chain: api.is_menu_item_settled(
-                                u, s.menu_type, s.ido, pin_chain=pc
-                            ),
-                            timeout=timeout,
-                        )
-                    results.append(
-                        {"udid": udid, "ok": True, "settled": settled, "response": resp}
-                    )
-                except EmodulApiError as exc:
-                    results.append(
-                        {
-                            "udid": udid,
-                            "ok": False,
-                            "error": f"API {exc.status} on {exc.path}: {exc.body}",
-                            "status": exc.status,
-                        }
-                    )
-        # Aggregate: if ANY target failed, the top-level envelope is NOT ok.
-        ok_count = sum(1 for r in results if r["ok"])
-        all_ok = ok_count == len(results)
+                    chosen = select_zones(zones, zone) if zone else zones
+                except ValueError as exc:
+                    results.append({"udid": udid, "ok": False, "error": str(exc)})
+                    continue
+                present, missing = ops.present_targets(api, cfg, udid, expand(s, chosen))
+                results += [
+                    {
+                        "udid": udid,
+                        "zone": t.zone.name if t.zone else None,
+                        "ido": t.ido,
+                        "ok": False,
+                        "error": "not in this controller's menu",
+                    }
+                    for t in missing
+                ]
+                results += ops.write_targets(
+                    api, cfg, udid, present, wire, wait=wait, timeout=timeout
+                )
+        ok_count = sum(1 for r in results if r["ok"] and r.get("verified") is not False)
         payload = {
             "name": s.name,
             "label": s.pl_label,
@@ -837,10 +809,10 @@ async def update_setting(
             "ok_count": ok_count,
             "fail_count": len(results) - ok_count,
         }
-        if all_ok:
+        if ok_count == len(results):
             return ok_response(**payload)
         return err_response(
-            f"{len(results) - ok_count}/{len(results)} targets failed",
+            f"{len(results) - ok_count}/{len(results)} targets failed or unverified",
             code="partial_failure",
             **payload,
         )

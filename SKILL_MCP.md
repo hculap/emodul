@@ -23,7 +23,7 @@ The user has no shell exposed to you here. Reach for an MCP tool for every inter
 - `list_zones` — flat list of zones; pass `all_modules=true` for cross-controller view
 - `get_zone` — single zone full detail by name substring or numeric id
 - `list_schedules` — globalSchedule slots (0-4) decoded: day mask, intervals, setback
-- `audit_settings` — walk all 25 named-slug settings, flag bad / non-default values; cross-module drift
+- `audit_settings` — walk all 26 named-slug settings on every zone, flag bad / non-default values; drift between zones and controllers
 - `get_alarms` — alarm + warning history with date filters
 - `get_temperature_history` — per-zone temperature curves; period or month/year
 
@@ -32,7 +32,7 @@ The user has no shell exposed to you here. Reach for an MCP tool for every inter
 - `boost_zone` — timeLimit mode: hold target for N minutes, then revert
 - `toggle_zone` — zoneOn / zoneOff (summer-off, etc.)
 - `attach_schedule` — bind a zone to globalSchedule slot 0-4
-- `update_setting` — write any of the 25 named slugs (emergency-mode, hysteresis, weather-control, ...)
+- `update_setting` — write any of the 26 named slugs (emergency-mode, hysteresis, weather-control, ...); zone-scoped slugs need `zone` or `all_zones=true`
 
 ### Auth (2)
 - `login_browser` — opens a local 127.0.0.1 form; user types password in BROWSER, never sees the agent. Returns once user submits or after `timeout` seconds.
@@ -154,7 +154,7 @@ Most users will have run `emodul auth login --browser` from their terminal once 
 ## Resources
 
 - **`emodul/mcp/server.py`** in the installed package — canonical source for tool definitions, schemas, and behavior. If a description on a tool doesn't match what you observe, the code wins.
-- **`emodul/settings_map.py`** — all 25 named-slug definitions used by `update_setting` and `audit_settings`.
+- **`emodul/settings_map.py`** — all 26 named-slug definitions used by `update_setting` and `audit_settings`.
 - **`README.md`** (in the source repo) — full architecture, endpoint map, wire conventions, security notes. Not bundled into this skill but available at https://github.com/hculap/emodul.
 
 Do NOT instruct the user to run shell commands like `curl`, `httpx`, or raw `emodul` CLI invocations — those are out of reach in this runtime. If a task genuinely requires the CLI (e.g. setting up the background watcher service), tell the user to run it in their own terminal and stop trying tools.

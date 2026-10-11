@@ -103,20 +103,22 @@ emodul zones audit --period week
 
 ### `settings` — high-level named-slug parameters (preferred over raw `menu`)
 
-25 named slugs across MU/MI/MS categories. Run `emodul --json settings list` to enumerate.
+26 named slugs across MU/MI/MS categories. Run `emodul --json settings list` to enumerate — each has a `scope`: `zone` (one value per "Strefa N": emergency-mode, hysteresis, sigma-range, actuator-*, weather-control, heating, cooling, presets, optimum-*, sensor-calibration) or `module` (antifreeze, pump-antistop, relay-delay, temp-max/min, diagnostic-file, show-all). Zone-scoped writes require `--zone <name|number>` or `--all-zones`.
 
 ```bash
 emodul --json settings list                                       # inventory
-emodul --json settings show                                       # dashboard for default module
+emodul --json settings show                                       # dashboard for default module, one row per zone
+emodul --json settings show --zone Łazienka                       # one zone (name or Strefa number)
 emodul --json settings show --category safety                     # filter by category
 emodul --json settings show --include-locked                      # show items the server reports as access=false
-emodul --json settings get emergency-mode -m <module>
-emodul settings set emergency-mode 30                             # writes; blocks until settled
-emodul settings set diagnostic-file off --all-modules             # mass-apply
-emodul --json settings audit                                      # bad/warn items + cross-module drift detection
+emodul --json settings get emergency-mode -m <module>             # zone-scoped → value of every zone
+emodul settings set emergency-mode 30 --all-zones -m <module>     # writes each zone; blocks until value reads back
+emodul settings set hysteresis 0.4 --zone Biuro -m <module>       # single zone
+emodul settings set diagnostic-file off --all-modules             # module-wide setting, every controller
+emodul --json settings audit                                      # bad/warn per zone + drift between zones/controllers
 ```
 
-Common slug names: `emergency-mode`, `hysteresis`, `sigma-range`, `weather-control`, `cooling`, `heating`, `antifreeze`, `optimum-start`, `sensor-calibration`, `diagnostic-file`, `show-all`, `temp-max`, `temp-min`, `preset-comfort`, `preset-eco`, `preset-holiday`.
+Common slug names: `emergency-mode`, `hysteresis`, `sigma-range`, `weather-control`, `cooling`, `heating`, `antifreeze`, `pump-antistop`, `optimum-start`, `sensor-calibration`, `diagnostic-file`, `show-all`, `temp-max`, `temp-min`, `preset-comfort`, `preset-eco`, `preset-holiday`.
 
 ### `schedules` — globalSchedule introspection
 
@@ -284,7 +286,7 @@ JSON output is canonical. Text output adds rich-table formatting that won't pars
 ## Resources
 
 - **`README.md`** (same directory) — full architecture, endpoint map, wire conventions, security notes. Read when Quick Start isn't enough.
-- **`emodul/settings_map.py`** — all 25 named-slug definitions with `(menu_type, ido, kind, recommended_range, bad_values)`.
+- **`emodul/settings_map.py`** — all 26 named-slug definitions with `(menu_type, ido, kind, recommended_range, bad_values)`.
 - **`emodul/api.py`** — the HTTP wrapper; every endpoint is a method. Use as canonical reference for what's possible.
 - **External clients worth knowing about** (for cross-reference if the user mentions them):
   - Home Assistant integration: `mariusz-ostoja-swierczynski/tech-controllers` — same API, different surface.
