@@ -5,6 +5,16 @@ All notable changes to `emodul` are documented here. Format loosely follows
 [PyPI releases](https://pypi.org/project/emodul/#history) and
 [GitHub Releases](https://github.com/hculap/emodul/releases).
 
+## [Unreleased]
+
+### Added
+- The watcher samples every zone's temperature, setpoint, humidity and relay
+  state into a new `zone_samples` table every 10 minutes (`watch run
+  --sample-every`, also on `install-service`; 0 turns it off). `zone_events`
+  only records a temperature when the setpoint, mode or relay changes, which
+  left no continuous room-temperature series. Existing databases get the table
+  on the next start.
+
 ## [0.1.12] — 2026-10-11
 
 ### Fixed

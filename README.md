@@ -331,13 +331,14 @@ emodul raw POST '/api/v1/users/{user_id}/modules/{udid}/zones' \
 
 ## Watcher (background process)
 
-Long-running poller that records relay/zone transitions to SQLite. Insert-on-
-change only — a year of "nothing happens" stays tiny.
+Long-running poller that records relay/zone transitions to SQLite, insert-on-
+change, plus every zone's temperature every 10 minutes (`--sample-every`, 0 = off).
 
 ```bash
 emodul watch run                                                # foreground, Ctrl-C to stop
 emodul watch run --once                                         # single poll then exit
 emodul watch run --interval 30                                  # custom poll seconds
+emodul watch run --sample-every 900                             # zone temperatures every 15 min
 
 emodul watch install-service --interval 60                      # auto-start on boot
 emodul watch status                                             # recent events + service health
@@ -361,6 +362,7 @@ Database at `~/.local/state/emodul/state.db`:
 |---|---|---|
 | `tile_events` | Pompa, Styk beznapięciowy on/off | only on state change |
 | `zone_events` | Setpoint, current temp, mode, per-zone relay state | when any of setpoint/mode/relay changes |
+| `zone_samples` | Current temp, setpoint, humidity, relay state of every zone | every `--sample-every` seconds (default 600) |
 | `run_log` | Startup, errors, API failures | each event |
 
 Query examples:

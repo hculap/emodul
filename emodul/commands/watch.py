@@ -1,6 +1,6 @@
 """`emodul watch ...` — background poller that records relay/zone transitions.
 
-Stores events in a SQLite database. Cross-platform: ships installers for
+Stores events, plus every zone's temperature at a fixed cadence, in a SQLite database. Cross-platform: ships installers for
 macOS (launchd) and Linux (systemd --user) so it survives reboots.
 """
 from __future__ import annotations
@@ -21,12 +21,13 @@ from emodul.format import console, dump_json, err_console, flatten_zones
 
 SERVICE_NAME_MACOS = "com.emodul.watcher"
 SERVICE_NAME_LINUX = "emodul-watcher"
+DEFAULT_SAMPLE_EVERY = 600
 
 
 def register(cli: click.Group, wrap) -> None:
     @cli.group()
     def watch() -> None:
-        """Background watcher: log relay and zone transitions to SQLite."""
+        """Background watcher: log relay and zone transitions, and zone temperatures, to SQLite."""
 
     @watch.command("run")
     @click.option("--interval", type=int, default=60, show_default=True, help="Poll seconds.")
@@ -41,6 +42,13 @@ def register(cli: click.Group, wrap) -> None:
     @click.option(
         "--once", is_flag=True, help="Single poll then exit (for testing/cron use)."
     )
+    @click.option(
+        "--sample-every",
+        type=int,
+        default=DEFAULT_SAMPLE_EVERY,
+        show_default=True,
+        help="Seconds between zone temperature samples (0 = off).",
+    )
     @click.pass_obj
     @wrap
     def run(
@@ -49,12 +57,16 @@ def register(cli: click.Group, wrap) -> None:
         db: str | None,
         udid_args: tuple[str, ...],
         once: bool,
+        sample_every: int,
     ) -> None:
         """Foreground polling loop. SIGTERM = clean exit."""
         ctx.config.require_auth()
         db_path = Path(db) if db else storage.default_db_path()
         conn = storage.open_db(db_path)
-        err_console.print(f"[dim]emodul-watcher → {db_path} (interval={interval}s)[/dim]")
+        err_console.print(
+            f"[dim]emodul-watcher → {db_path} (interval={interval}s, "
+            f"zone samples every {sample_every}s)[/dim]"
+        )
 
         stop = {"flag": False}
 
@@ -72,11 +84,13 @@ def register(cli: click.Group, wrap) -> None:
                 conn,
                 "info",
                 f"watcher started; modules={udids}; interval={interval}s; "
-                f"i18n_entries={len(dictionary)}",
+                f"sample_every={sample_every}s; i18n_entries={len(dictionary)}",
                 int(time.time()),
             )
+            next_sample = 0.0
             while not stop["flag"]:
                 ts = int(time.time())
+                sample_due = sample_every > 0 and time.monotonic() >= next_sample
                 for udid in udids:
                     try:
                         snap = api.get_module(udid)
@@ -86,6 +100,10 @@ def register(cli: click.Group, wrap) -> None:
                         continue
                     _record_tiles(conn, ts, udid, snap, dictionary)
                     _record_zones(conn, ts, udid, snap)
+                    if sample_due:
+                        _record_zone_samples(conn, ts, udid, snap)
+                if sample_due:
+                    next_sample = time.monotonic() + sample_every
                 if once:
                     break
                 # Sleep in small chunks so SIGTERM is responsive.
@@ -112,6 +130,7 @@ def register(cli: click.Group, wrap) -> None:
             info["counts"] = {
                 "tile_events": conn.execute("SELECT COUNT(*) FROM tile_events").fetchone()[0],
                 "zone_events": conn.execute("SELECT COUNT(*) FROM zone_events").fetchone()[0],
+                "zone_samples": conn.execute("SELECT COUNT(*) FROM zone_samples").fetchone()[0],
                 "run_log": conn.execute("SELECT COUNT(*) FROM run_log").fetchone()[0],
             }
             info["recent_tile_events"] = [
@@ -145,11 +164,12 @@ def register(cli: click.Group, wrap) -> None:
     @watch.command("install-service")
     @click.option("--interval", type=int, default=60, show_default=True)
     @click.option("--db", type=click.Path(dir_okay=False), default=None)
+    @click.option("--sample-every", type=int, default=DEFAULT_SAMPLE_EVERY, show_default=True)
     @click.pass_obj
-    def install(ctx, interval: int, db: str | None) -> None:
+    def install(ctx, interval: int, db: str | None, sample_every: int) -> None:
         """Install launchd (macOS) or systemd --user (Linux) unit so it survives reboot."""
         db_path = Path(db) if db else storage.default_db_path()
-        cmd = _watcher_command(interval, db_path)
+        cmd = _watcher_command(interval, db_path, sample_every)
         plat = sys.platform
         if plat == "darwin":
             path = _install_launchd(cmd)
@@ -241,7 +261,23 @@ def _record_zones(conn, ts: int, udid: str, snap: dict) -> None:
             )
 
 
-def _watcher_command(interval: int, db_path: Path) -> list[str]:
+def _record_zone_samples(conn, ts: int, udid: str, snap: dict) -> None:
+    """One row per visible zone, whether or not anything changed."""
+    for row in flatten_zones(snap):
+        storage.insert_zone_sample(
+            conn,
+            ts,
+            udid,
+            int(row["zone_id"]),
+            row.get("name") or "",
+            row.get("current_c"),
+            row.get("set_c"),
+            row.get("humidity"),
+            row.get("relay"),
+        )
+
+
+def _watcher_command(interval: int, db_path: Path, sample_every: int = DEFAULT_SAMPLE_EVERY) -> list[str]:
     """Use `<interpreter> -m emodul watch run` — survives PATH issues."""
     return [
         sys.executable,
@@ -253,6 +289,8 @@ def _watcher_command(interval: int, db_path: Path) -> list[str]:
         str(interval),
         "--db",
         str(db_path),
+        "--sample-every",
+        str(sample_every),
     ]
 
 

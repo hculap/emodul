@@ -197,7 +197,7 @@ emodul watch install-service --interval 60            # background service (laun
 emodul watch uninstall-service                        # stop + remove
 ```
 
-Database: `~/.local/state/emodul/state.db` (SQLite). Tables: `tile_events` (Pompa, Styk on/off), `zone_events` (setpoint/mode/relay changes), `run_log` (errors). Insert-on-change only.
+Database: `~/.local/state/emodul/state.db` (SQLite). Tables: `tile_events` (Pompa, Styk on/off), `zone_events` (setpoint/mode/relay changes), `zone_samples` (every zone's temperature, setpoint, humidity and relay every 10 min, `--sample-every`), `run_log` (errors). The event tables are insert-on-change.
 
 ### `auth`, `i18n`, `poll`, `raw`, `status` — utility
 
