@@ -7,6 +7,8 @@ All notable changes to `emodul` are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [0.1.13] — 2026-10-15
+
 ### Added
 - The watcher samples every zone's temperature, setpoint, humidity and relay
   state into a new `zone_samples` table every 10 minutes (`watch run
@@ -208,6 +210,8 @@ Initial release. CLI with 12 subcommand groups (`auth`, `modules`,
 named-slug parameter control, Polish menu decoding via i18n cache,
 SQLite-backed background watcher with launchd/systemd installer.
 
+[0.1.13]: https://github.com/hculap/emodul/compare/v0.1.12...v0.1.13
+[0.1.12]: https://github.com/hculap/emodul/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/hculap/emodul/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/hculap/emodul/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/hculap/emodul/compare/v0.1.8...v0.1.9
