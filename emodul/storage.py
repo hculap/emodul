@@ -1,4 +1,4 @@
-"""SQLite event log for relay/tile state transitions and zone-setpoint changes."""
+"""SQLite log: relay/tile transitions, zone-setpoint changes, periodic zone temperatures."""
 from __future__ import annotations
 
 import os
@@ -37,6 +37,19 @@ CREATE TABLE IF NOT EXISTS zone_events (
   PRIMARY KEY (ts, udid, zone_id)
 );
 CREATE INDEX IF NOT EXISTS ix_zone_events_zone ON zone_events (udid, zone_id, ts);
+
+CREATE TABLE IF NOT EXISTS zone_samples (
+  ts          INTEGER NOT NULL,
+  udid        TEXT    NOT NULL,
+  zone_id     INTEGER NOT NULL,
+  name        TEXT,
+  current_c   REAL,
+  set_c       REAL,
+  humidity    REAL,
+  relay       TEXT,
+  PRIMARY KEY (ts, udid, zone_id)
+);
+CREATE INDEX IF NOT EXISTS ix_zone_samples_zone ON zone_samples (udid, zone_id, ts);
 
 CREATE TABLE IF NOT EXISTS run_log (
   ts        INTEGER NOT NULL,
@@ -95,6 +108,25 @@ def insert_zone_event(
         "(ts, udid, zone_id, name, set_c, current_c, mode, relay) "
         "VALUES (?,?,?,?,?,?,?,?)",
         (ts, udid, zone_id, name, set_c, current_c, mode, relay),
+    )
+
+
+def insert_zone_sample(
+    conn: sqlite3.Connection,
+    ts: int,
+    udid: str,
+    zone_id: int,
+    name: str,
+    current_c: float | None,
+    set_c: float | None,
+    humidity: float | None,
+    relay: str | None,
+) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO zone_samples "
+        "(ts, udid, zone_id, name, current_c, set_c, humidity, relay) "
+        "VALUES (?,?,?,?,?,?,?,?)",
+        (ts, udid, zone_id, name, current_c, set_c, humidity, relay),
     )
 
 
